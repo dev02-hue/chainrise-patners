@@ -4,12 +4,13 @@ import FAQSection from "../component/home/FAQSection";
 import HeroSection from "../component/home/HeroSection";
 import InvestmentCalculator from "../component/home/InvestmentCalculator";
 import LetsDoGreat from "../component/home/LetsDoGreat";
+import Newsletter from "../component/home/Newsletter";
 import OurAdvantage from "../component/home/OurAdvantage";
+import OurBusinesses from "../component/home/OurBusinesses";
 import PricingSection from "../component/home/PricingSection";
 import { TestimonialSection } from "../component/home/TestimonialSection";
 import { WorkProcess } from "../component/home/WorkProcess";
 import YouTubeVideo from "../component/home/YouTubeVideo";
-import Footer from "../component/layout/Footer";
  
  
 export default function Home() {
@@ -27,7 +28,8 @@ export default function Home() {
   <WorkProcess />
   <TestimonialSection />
   <FAQSection />
-  <Footer />
+  <OurBusinesses />
+  <Newsletter />
      </div>
   );
 }
