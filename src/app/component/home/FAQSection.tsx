@@ -7,7 +7,7 @@ import { FiPlus, FiMinus } from 'react-icons/fi';
 const faqs = [
   {
     question: "How do I create an account with Accilent Finance?",
-    answer: "Creating an account is simple. Click on the 'Register' button at the top right corner of our website, fill in your details, verify your email address, and complete your profile setup. The entire process takes less than 5 minutes."
+    answer: "Creating an account is simple. Click on the 'Get started' button at the top right corner of our website, fill in your details. The entire process takes less than 5 minutes."
   },
   {
     question: "What are the minimum investment requirements?",
