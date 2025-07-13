@@ -1,18 +1,21 @@
 import AboutUs from "../component/home/AboutUs";
 import CryptoCurrencyTicker from "../component/home/CryptoCurrencyTicker";
+import FAQSection from "../component/home/FAQSection";
 import HeroSection from "../component/home/HeroSection";
+import InvestmentCalculator from "../component/home/InvestmentCalculator";
 import LetsDoGreat from "../component/home/LetsDoGreat";
 import OurAdvantage from "../component/home/OurAdvantage";
 import PricingSection from "../component/home/PricingSection";
+import { TestimonialSection } from "../component/home/TestimonialSection";
+import { WorkProcess } from "../component/home/WorkProcess";
 import YouTubeVideo from "../component/home/YouTubeVideo";
 import Footer from "../component/layout/Footer";
-import Nav from "../component/layout/Nav";
-
+ 
  
 export default function Home() {
   return (
      <div>
-  <Nav />
+ 
   <CryptoCurrencyTicker />
   <HeroSection /> 
   <OurAdvantage />
@@ -20,6 +23,10 @@ export default function Home() {
   <LetsDoGreat />
   <AboutUs />
   <PricingSection />
+  <InvestmentCalculator />
+  <WorkProcess />
+  <TestimonialSection />
+  <FAQSection />
   <Footer />
      </div>
   );
