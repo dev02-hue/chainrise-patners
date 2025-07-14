@@ -1,9 +1,15 @@
 import React from 'react'
 import InvestmentHeader from '../component/plan/InvestmentHeader'
-
+import PricingSection from '../component/home/PricingSection'
+import Newsletter from '../component/home/Newsletter'
+ 
 const page = () => {
   return (
-    <div><InvestmentHeader /></div>
+    <div>
+      <InvestmentHeader />
+       <PricingSection />
+       <Newsletter />
+    </div>
   )
 }
 

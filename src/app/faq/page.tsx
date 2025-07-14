@@ -1,8 +1,13 @@
 import React from 'react'
+import FaqHeader from '../component/faq/FaqHeader'
+import FAQSection from '../component/home/FAQSection'
 
 const page = () => {
   return (
-    <div>page</div>
+    <div>
+      <FaqHeader />
+      <FAQSection />
+    </div>
   )
 }
 
