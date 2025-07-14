@@ -11,6 +11,7 @@ import PricingSection from "../component/home/PricingSection";
 import { TestimonialSection } from "../component/home/TestimonialSection";
 import { WorkProcess } from "../component/home/WorkProcess";
 import YouTubeVideo from "../component/home/YouTubeVideo";
+import TeamSection from "../component/plan/TeamSection";
  
  
 export default function Home() {
@@ -26,6 +27,7 @@ export default function Home() {
   <PricingSection />
   <InvestmentCalculator />
   <WorkProcess />
+  <TeamSection />
   <TestimonialSection />
   <FAQSection />
   <OurBusinesses />
