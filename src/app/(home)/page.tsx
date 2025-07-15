@@ -17,7 +17,6 @@ import TeamSection from "../component/plan/TeamSection";
 export default function Home() {
   return (
      <div>
- 
   <CryptoCurrencyTicker />
   <HeroSection /> 
   <OurAdvantage />

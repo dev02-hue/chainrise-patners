@@ -2,10 +2,12 @@
 
 import { motion, Variants } from 'framer-motion'
 import Image from 'next/image'
-import Link from 'next/link'
-import { FaArrowRight } from 'react-icons/fa'
+ import { FaArrowRight } from 'react-icons/fa'
+import { useRouter } from 'next/navigation'  
 
 export default function HeroSection() {
+  const router = useRouter()   
+
   const fadeUp: Variants = {
     hidden: { y: 40, opacity: 0 },
     show: (i: number) => ({
@@ -21,10 +23,7 @@ export default function HeroSection() {
 
   return (
     <section className="relative overflow-hidden bg-gradient-to-br from-[#f1f9f5] via-white to-[#e0f2ec] py-12 sm:py-16 md:py-20 lg:py-28">
-      {/* Subtle background pattern */}
-      <div className="absolute inset-0 opacity-5">
-        <div className="absolute inset-0 bg-[url('/grid-pattern.svg')] bg-[length:60px_60px]"></div>
-      </div>
+     
       
       <div className="container mx-auto flex max-w-7xl flex-col-reverse items-center gap-10 px-4 sm:px-6 md:flex-row md:gap-8 lg:gap-16">
         {/* ——————————————————————————  LEFT CONTENT —————————————————————————— */}
@@ -56,38 +55,38 @@ export default function HeroSection() {
             brighter, more prosperous future together.
           </motion.p>
 
-          {/* Buttons */}
+          {/* Buttons - FIXED */}
           <motion.div
             custom={2}
             variants={fadeUp}
             className="flex flex-wrap items-center gap-3 sm:gap-4"
           >
-            <Link href="/register" passHref legacyBehavior>
-              <motion.a
-                whileHover={{ 
-                  scale: 1.03,
-                  backgroundColor: '#115e59'
-                }}
-                whileTap={{ scale: 0.97 }}
-                className="group inline-flex items-center gap-2 rounded-lg bg-teal-800 px-5 py-2.5 text-sm font-semibold text-white shadow-lg transition-colors hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-300 focus:ring-offset-2 sm:px-6 sm:py-3 sm:text-base"
-              >
-                Get Started 
-                <FaArrowRight className="transition-transform group-hover:translate-x-1" />
-              </motion.a>
-            </Link>
+            {/* Get Started Button */}
+            <motion.div
+              whileHover={{ 
+                scale: 1.03,
+                backgroundColor: '#115e59'
+              }}
+              whileTap={{ scale: 0.97 }}
+              className="group inline-flex items-center gap-2 rounded-lg bg-teal-800 px-5 py-2.5 text-sm font-semibold text-white shadow-lg transition-colors hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-300 focus:ring-offset-2 sm:px-6 sm:py-3 sm:text-base cursor-pointer"
+              onClick={() => router.push('/signup')}
+            >
+              Get Started 
+              <FaArrowRight className="transition-transform group-hover:translate-x-1" />
+            </motion.div>
 
-            <Link href="/login" passHref legacyBehavior>
-              <motion.a
-                whileHover={{ 
-                  scale: 1.03,
-                  backgroundColor: '#f0fdfa'
-                }}
-                whileTap={{ scale: 0.97 }}
-                className="inline-flex items-center gap-2 rounded-lg border-2 border-teal-800 bg-white px-5 py-2.5 text-sm font-semibold text-teal-800 transition-colors hover:bg-teal-50 focus:outline-none focus:ring-2 focus:ring-teal-200 focus:ring-offset-2 sm:px-6 sm:py-3 sm:text-base"
-              >
-                Login
-              </motion.a>
-            </Link>
+            {/* Login Button */}
+            <motion.div
+              whileHover={{ 
+                scale: 1.03,
+                backgroundColor: '#f0fdfa'
+              }}
+              whileTap={{ scale: 0.97 }}
+              className="inline-flex items-center gap-2 rounded-lg border-2 border-teal-800 bg-white px-5 py-2.5 text-sm font-semibold text-teal-800 transition-colors hover:bg-teal-50 focus:outline-none focus:ring-2 focus:ring-teal-200 focus:ring-offset-2 sm:px-6 sm:py-3 sm:text-base cursor-pointer"
+              onClick={() => router.push('/signin')}
+            >
+              Login
+            </motion.div>
           </motion.div>
         </motion.div>
 
