@@ -1,0 +1,444 @@
+'use server'
+
+import { supabase } from '@/lib/supabaseClient'
+import { createClient } from '@supabase/supabase-js'
+import { cookies } from 'next/headers'
+import { v4 as uuidv4 } from 'uuid'
+import nodemailer from 'nodemailer'
+
+type SignUpInput = {
+  name: string
+  email: string
+  username: string
+  phoneNumber: string
+  password: string
+  confirmPassword: string
+}
+
+type SignInInput = {
+  emailOrUsername: string
+  password: string
+}
+
+type ResetPasswordInput = {
+  email: string
+}
+
+type ConfirmResetPasswordInput = {
+  token: string
+  newPassword: string
+  confirmNewPassword: string
+}
+
+export async function signUp({
+  name,
+  email,
+  username,
+  phoneNumber,
+  password,
+  confirmPassword,
+}: SignUpInput) {
+  try {
+    // 1. Validate input
+    if (password !== confirmPassword) {
+      return { error: 'Passwords do not match' }
+    }
+    if (password.length < 8) {
+      return { error: 'Password must be at least 8 characters long' }
+    }
+
+    // 2. Check if username, email or phone already exists
+    const { data: existingUser, error: lookupError } = await supabase
+      .from('accilent_profile')
+      .select('username, email, phone_number')
+      .or(`username.eq.${username},email.eq.${email},phone_number.eq.${phoneNumber}`)
+
+    if (lookupError) {
+      console.error('User lookup error:', lookupError)
+      return { error: 'Error checking existing users' }
+    }
+
+    if (existingUser && existingUser.length > 0) {
+      if (existingUser.some(user => user.username === username)) {
+        return { error: 'Username already taken' }
+      }
+      if (existingUser.some(user => user.email === email)) {
+        return { error: 'Email already registered' }
+      }
+      if (existingUser.some(user => user.phone_number === phoneNumber)) {
+        return { error: 'Phone number already registered' }
+      }
+    }
+
+    // 3. Create user in Supabase Auth
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          name,
+          username,
+          phone_number: phoneNumber,
+        },
+        emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback`,
+      },
+    })
+
+    if (authError || !authData?.user) {
+      console.error('Auth error:', authError)
+      return { error: authError?.message || 'Signup failed' }
+    }
+
+    const userId = authData.user.id
+
+    // 4. Create user profile
+    const now = new Date().toISOString()
+    const { error: profileError } = await supabase.from('accilent_profile').insert([{
+      id: userId,
+      name,
+      username,
+      email,
+      phone_number: phoneNumber,
+      created_at: now,
+      updated_at: now,
+    }])
+
+    if (profileError) {
+      await supabase.auth.admin.deleteUser(userId)
+      return { error: 'Failed to create profile: ' + profileError.message }
+    }
+
+    // 5. Send welcome email
+    try {
+      const transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+          user: process.env.EMAIL_USERNAME,
+          pass: process.env.EMAIL_PASSWORD,
+        },
+      })
+
+      const mailOptions = {
+        from: process.env.EMAIL_FROM,
+        to: email,
+        subject: 'Welcome to Accilent - Confirm Your Email',
+        html: `
+          <p>Hello ${name},</p>
+          <p>Thank you for registering with Accilent!</p>
+          <p>Your username: <strong>${username}</strong></p>
+          <p>Please click the link below to verify your email address:</p>
+          <p><a href="${process.env.NEXT_PUBLIC_SITE_URL}/auth/confirm-email?token=${authData.session?.access_token}">Verify Email</a></p>
+          <p>If you didn't create this account, please contact support immediately.</p>
+        `,
+      }
+
+      await transporter.sendMail(mailOptions)
+    } catch (emailError) {
+      console.error('Failed to send welcome email:', emailError)
+      // Not critical, so we continue
+    }
+
+    return {
+      user: authData.user,
+      session: authData.session,
+      message: 'Signup successful! Please check your email for confirmation.',
+    }
+  } catch (err) {
+    console.error('Unexpected signup error:', err)
+    return { error: 'An unexpected error occurred during signup' }
+  }
+}
+
+export async function signIn({ emailOrUsername, password }: SignInInput) {
+  try {
+    // 1. Validate input
+    if (!emailOrUsername || !password) {
+      return { error: 'Email/Username and password are required' }
+    }
+
+    // 2. Determine if input is email or username
+    const isEmail = emailOrUsername.includes('@')
+    let email = emailOrUsername
+    
+    if (!isEmail) {
+      // Lookup email by username
+      const { data: profile, error: profileError } = await supabase
+        .from('accilent_profile')
+        .select('email')
+        .eq('username', emailOrUsername)
+        .single()
+
+      if (profileError || !profile) {
+        return { error: 'Invalid username or password' }
+      }
+      email = profile.email
+    }
+
+    // 3. Attempt authentication
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    })
+
+    if (error) {
+      console.error('Authentication failed:', error.message)
+      return { error: 'Invalid credentials' }
+    }
+
+    // 4. Handle session
+    const sessionToken = data.session?.access_token
+    const refreshToken = data.session?.refresh_token
+    const userId = data.user?.id
+
+    if (!sessionToken || !refreshToken || !userId) {
+      console.error('Incomplete session data')
+      return { error: 'Failed to create session' }
+    }
+
+    // 5. Set cookies
+    const cookieStore =await cookies()
+    const oneYear = 31536000 // 1 year in seconds
+
+    cookieStore.set('sb-access-token', sessionToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: oneYear,
+      path: '/',
+      sameSite: 'lax',
+    })
+
+    cookieStore.set('sb-refresh-token', refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: oneYear,
+      path: '/',
+      sameSite: 'lax',
+    })
+
+    cookieStore.set('user_id', userId, {
+      httpOnly: false,
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: oneYear,
+      path: '/',
+      sameSite: 'lax',
+    })
+
+    // Get username to store in cookie
+    const { data: userProfile } = await supabase
+      .from('accilent_profile')
+      .select('username')
+      .eq('id', userId)
+      .single()
+
+    if (userProfile?.username) {
+      cookieStore.set('username', userProfile.username, {
+        httpOnly: false,
+        secure: process.env.NODE_ENV === 'production',
+        maxAge: oneYear,
+        path: '/',
+        sameSite: 'lax',
+      })
+    }
+
+    return {
+      user: data.user,
+      session: data.session,
+      message: 'Login successful'
+    }
+  } catch (err) {
+    console.error('Unexpected login error:', err)
+    return { error: 'An unexpected error occurred' }
+  }
+}
+
+export async function resetPassword({ email }: ResetPasswordInput) {
+  try {
+    // 1. Validate input
+    if (!email) {
+      return { error: 'Email is required' }
+    }
+
+    // 2. Find user by email
+    const { data: user, error: userError } = await supabase
+      .from('accilent_profile')
+      .select('id, name')
+      .eq('email', email)
+      .single()
+
+    if (userError || !user) {
+      return { error: 'No account found with this email' }
+    }
+
+    // 3. Generate reset token
+    const token = uuidv4()
+    const expiresAt = new Date(Date.now() + 3600000) // 1 hour from now
+
+    // 4. Store token in database
+    const { error: tokenError } = await supabase
+      .from('password_reset_tokens')
+      .insert({
+        user_id: user.id,
+        token,
+        expires_at: expiresAt.toISOString(),
+      })
+
+    if (tokenError) {
+      console.error('Failed to store reset token:', tokenError)
+      return { error: 'Failed to generate reset link' }
+    }
+
+    // 5. Send email with reset link
+    try {
+      const transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+          user: process.env.EMAIL_USERNAME,
+          pass: process.env.EMAIL_PASSWORD,
+        },
+      })
+
+      const resetLink = `${process.env.NEXT_PUBLIC_SITE_URL}/auth/reset-password?token=${token}`
+
+      const mailOptions = {
+        from: process.env.EMAIL_FROM,
+        to: email,
+        subject: 'Accilent - Password Reset Request',
+        html: `
+          <p>Hello ${user.name},</p>
+          <p>We received a request to reset your Accilent account password.</p>
+          <p>Click the link below to reset your password:</p>
+          <p><a href="${resetLink}">Reset Password</a></p>
+          <p>This link will expire in 1 hour.</p>
+          <p>If you didn't request this, please ignore this email.</p>
+        `,
+      }
+
+      await transporter.sendMail(mailOptions)
+    } catch (emailError) {
+      console.error('Failed to send reset email:', emailError)
+      return { error: 'Failed to send reset link' }
+    }
+
+    return { 
+      success: true, 
+      message: 'Password reset link sent to your email',
+    }
+  } catch (err) {
+    console.error('Unexpected error in resetPassword:', err)
+    return { error: 'An unexpected error occurred. Please try again.' }
+  }
+}
+
+export async function confirmResetPassword({
+  token,
+  newPassword,
+  confirmNewPassword,
+}: ConfirmResetPasswordInput) {
+  try {
+    // 1. Validate input
+    if (!token || !newPassword || !confirmNewPassword) {
+      return { error: 'All fields are required' }
+    }
+    if (newPassword !== confirmNewPassword) {
+      return { error: 'Passwords do not match' }
+    }
+    if (newPassword.length < 8) {
+      return { error: 'Password must be at least 8 characters long' }
+    }
+
+    // 2. Verify token
+    const { data: tokenRecord, error: tokenError } = await supabase
+      .from('password_reset_tokens')
+      .select('*')
+      .eq('token', token)
+      .gt('expires_at', new Date().toISOString())
+      .eq('used', false)
+      .single()
+
+    if (tokenError || !tokenRecord) {
+      return { error: 'Invalid or expired reset link. Please request a new one.' }
+    }
+
+    // 3. Use admin client to reset password
+    const supabaseAdmin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    )
+
+    const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
+      tokenRecord.user_id,
+      { password: newPassword }
+    )
+
+    if (updateError) {
+      console.error('Password update error:', updateError)
+      return { error: 'Failed to update password. Please try again.' }
+    }
+
+    // 4. Mark token as used
+    await supabase
+      .from('password_reset_tokens')
+      .update({ used: true })
+      .eq('id', tokenRecord.id)
+
+    return {
+      success: true,
+      message: 'Password reset successfully! You can now log in with your new password.'
+    }
+  } catch (err) {
+    console.error('Unexpected error in confirmResetPassword:', err)
+    return { error: 'An unexpected error occurred. Please try again.' }
+  }
+}
+
+export async function signOut() {
+  try {
+    // 1. Sign out from Supabase Auth
+    const { error: authError } = await supabase.auth.signOut()
+    
+    if (authError) {
+      console.error('Supabase sign out error:', authError.message)
+      return { error: 'Failed to sign out from authentication service' }
+    }
+
+    // 2. Clear all auth-related cookies
+    const cookieStore =await cookies()
+    
+    cookieStore.delete('sb-access-token')
+    cookieStore.delete('sb-refresh-token')
+    cookieStore.delete('user_id')
+    cookieStore.delete('username')
+
+    // 3. Return success
+    return { success: true, message: 'Signed out successfully' }
+  } catch (err) {
+    console.error('Unexpected sign out error:', err)
+    return { error: 'An unexpected error occurred during sign out' }
+  }
+}
+
+export async function getSession() {
+  try {
+    const cookieStore =await cookies()
+    const accessToken = cookieStore.get('sb-access-token')?.value
+    const refreshToken = cookieStore.get('sb-refresh-token')?.value
+
+    if (!accessToken || !refreshToken) {
+      return { session: null, user: null }
+    }
+
+    const { data, error } = await supabase.auth.setSession({
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    })
+
+    if (error || !data.session) {
+      return { session: null, user: null }
+    }
+
+    return { session: data.session, user: data.user }
+  } catch (err) {
+    console.error('Error getting session:', err)
+    return { session: null, user: null }
+  }
+}
