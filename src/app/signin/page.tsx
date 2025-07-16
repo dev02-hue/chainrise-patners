@@ -1,9 +1,13 @@
 import React from 'react'
 import LoginForm from '../component/layout/LoginForm'
+import CryptoCurrencyTicker from '../component/home/CryptoCurrencyTicker'
 
 const page = () => {
   return (
-    <div><LoginForm /></div>
+    <div>
+      <CryptoCurrencyTicker />
+      <LoginForm />
+      </div>
   )
 }
 

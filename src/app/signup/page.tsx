@@ -1,6 +1,6 @@
 import React from 'react'
-import { SignUpForm } from '../component/layout/SignUpForm'
-
+import SignUpForm from '../component/layout/SignUpForm'
+ 
 const page = () => {
   return (
     <div><SignUpForm /></div>
