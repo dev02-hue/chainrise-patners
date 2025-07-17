@@ -1,8 +1,11 @@
+import CryptoAddressDisplay from '@/app/component/user/profile/CryptoAddressDisplay'
 import React from 'react'
 
 const page = () => {
   return (
-    <div>page</div>
+    <div>
+      <CryptoAddressDisplay />
+      </div>
   )
 }
 

@@ -27,3 +27,51 @@ export const businesses = [
       "Our stock trading platform uses real-time analytics and market insights to identify opportunities and generate consistent returns for our clients.",
   },
 ];
+
+
+
+
+export  type CryptoType = 'BTC' | 'ETH' | 'BNB' | 'DOGE' | 'SOL' | 'USDT';
+
+export type DepositInput = {
+  planId: number;
+  amount: number;
+  cryptoType: CryptoType;
+  transactionHash?: string;
+};
+
+export  type InvestmentPlan = {
+  id: number;
+  title: string;
+  percentage: number;
+  minAmount: number;
+  maxAmount: number;
+  durationDays: number;
+  interval: string;
+  referralBonus: number;
+};
+
+export  type CryptoPaymentOption = {
+  id: number;
+  name: string;
+  symbol: string;
+  network: string;
+  walletAddress: string;
+};
+
+export  type DepositStatus = 'pending' | 'completed' | 'rejected';
+
+export  type Deposit = {
+  id: string;
+  amount: number;
+  cryptoType: CryptoType;
+  status: DepositStatus;
+  reference: string;
+  createdAt: string;
+  processedAt?: string;
+  transactionHash?: string;
+  adminNotes?: string;
+  planTitle?: string;
+  userEmail?: string;
+  username?: string;
+};
