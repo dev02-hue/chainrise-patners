@@ -75,3 +75,29 @@ export  type Deposit = {
   userEmail?: string;
   username?: string;
 };
+
+
+// Withdrawal status types
+export type WithdrawalStatus = 'pending' | 'processing' | 'completed' | 'rejected';
+
+// Input for initiating a withdrawal
+export interface WithdrawalInput {
+  amount: number;
+  cryptoType: string;
+  walletAddress: string;
+}
+
+// Withdrawal object
+export interface Withdrawal {
+  id: string;
+  amount: number;
+  cryptoType: string;
+  status: WithdrawalStatus;
+  reference: string;
+  walletAddress: string;
+  createdAt: string;
+  processedAt?: string;
+  adminNotes?: string;
+  userEmail?: string;       // Only for admin views
+  username?: string;        // Only for admin views
+}

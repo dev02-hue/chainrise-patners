@@ -1,10 +1,10 @@
-import WithdrawalForm from '@/app/component/user/profile/WithdrawalForm'
+import DepositManager from '@/app/component/admin/DepositActions'
 import React from 'react'
 
 const page = () => {
   return (
     <div>
-      <WithdrawalForm />
+        <DepositManager />
     </div>
   )
 }
