@@ -66,7 +66,6 @@ export async function getCryptoPaymentOptions(): Promise<{ data?: CryptoPaymentO
   }
 }
 
-// Initiate a deposit
 export async function initiateDeposit({
   planId,
   amount,
@@ -74,15 +73,26 @@ export async function initiateDeposit({
   transactionHash
 }: DepositInput): Promise<{ success?: boolean; error?: string; depositId?: string }> {
   try {
+    console.log('[initiateDeposit] Starting deposit process with params:', {
+      planId,
+      amount,
+      cryptoType,
+      transactionHash: transactionHash ? 'provided' : 'not provided'
+    });
+
     // 1. Get current session
-    const session = await getSession(); // Fixed: Removed destructuring since getSession might not return { session }
+    console.log('[initiateDeposit] Getting user session...');
+    const session = await getSession();
     if (!session?.user) {
+      console.warn('[initiateDeposit] No authenticated user found');
       return { error: 'Not authenticated' };
     }
+    console.log('[initiateDeposit] User authenticated:', session.user.id);
 
     const userId = session.user.id;
 
     // 2. Validate amount against selected plan
+    console.log(`[initiateDeposit] Validating plan ${planId} and amount ${amount}...`);
     const { data: plan, error: planError } = await supabase
       .from('investment_plans')
       .select('min_amount, max_amount')
@@ -90,14 +100,19 @@ export async function initiateDeposit({
       .single();
 
     if (planError || !plan) {
+      console.error('[initiateDeposit] Plan validation failed:', planError || 'Plan not found');
       return { error: 'Invalid investment plan' };
     }
+    console.log('[initiateDeposit] Plan validated:', plan);
 
     if (amount < plan.min_amount || amount > plan.max_amount) {
+      console.warn(`[initiateDeposit] Amount ${amount} outside plan range (${plan.min_amount}-${plan.max_amount})`);
       return { error: `Amount must be between $${plan.min_amount} and $${plan.max_amount} for this plan` };
     }
+    console.log('[initiateDeposit] Amount validated');
 
     // 3. Get wallet address for selected crypto
+    console.log(`[initiateDeposit] Getting wallet address for ${cryptoType}...`);
     const { data: cryptoOption, error: cryptoError } = await supabase
       .from('crypto_payment_options')
       .select('wallet_address')
@@ -105,14 +120,18 @@ export async function initiateDeposit({
       .single();
 
     if (cryptoError || !cryptoOption) {
+      console.error('[initiateDeposit] Crypto validation failed:', cryptoError || 'Crypto option not found');
       return { error: 'Invalid cryptocurrency selected' };
     }
+    console.log('[initiateDeposit] Wallet address retrieved');
 
     // 4. Generate reference
     const reference = `DEP-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
     const narration = `Investment deposit for plan ${planId}`;
+    console.log('[initiateDeposit] Generated reference:', reference);
 
     // 5. Create deposit record
+    console.log('[initiateDeposit] Creating deposit record...');
     const { data: deposit, error: depositError } = await supabase
       .from('deposits')
       .insert([{
@@ -129,11 +148,13 @@ export async function initiateDeposit({
       .single();
 
     if (depositError || !deposit) {
-      console.error('Error creating deposit:', depositError);
+      console.error('[initiateDeposit] Deposit creation failed:', depositError);
       return { error: 'Failed to initiate deposit' };
     }
+    console.log('[initiateDeposit] Deposit created successfully:', deposit.id);
 
     // 6. Notify admin
+    console.log('[initiateDeposit] Sending admin notification...');
     await sendDepositNotificationToAdmin({
       userId,
       userEmail: session.user.email || '',
@@ -145,15 +166,16 @@ export async function initiateDeposit({
       walletAddress: cryptoOption.wallet_address,
       transactionHash
     });
+    console.log('[initiateDeposit] Admin notification sent');
 
+    console.log('[initiateDeposit] Deposit process completed successfully');
     return { success: true, depositId: deposit.id };
   } catch (err) {
-    console.error('Unexpected error in initiateDeposit:', err);
+    console.error('[initiateDeposit] Unexpected error:', err);
     return { error: 'An unexpected error occurred' };
   }
 }
 
-// Send deposit notification to admin
 async function sendDepositNotificationToAdmin(params: {
   userId: string;
   userEmail: string;
@@ -166,6 +188,8 @@ async function sendDepositNotificationToAdmin(params: {
   transactionHash?: string;
 }) {
   try {
+    console.log('[sendDepositNotificationToAdmin] Preparing email notification for deposit:', params.depositId);
+
     const transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: {
@@ -175,6 +199,7 @@ async function sendDepositNotificationToAdmin(params: {
     });
 
     // Get plan title for email
+    console.log('[sendDepositNotificationToAdmin] Fetching plan details...');
     const { data: plan } = await supabase
       .from('investment_plans')
       .select('title')
@@ -211,12 +236,13 @@ async function sendDepositNotificationToAdmin(params: {
       `,
     };
 
+    console.log('[sendDepositNotificationToAdmin] Sending email...');
     await transporter.sendMail(mailOptions);
+    console.log('[sendDepositNotificationToAdmin] Email sent successfully');
   } catch (error) {
-    console.error('Failed to send admin notification:', error);
+    console.error('[sendDepositNotificationToAdmin] Failed to send email:', error);
   }
 }
-
 // Approve a deposit
 export async function approveDeposit(depositId: string): Promise<{ success?: boolean; error?: string; currentStatus?: string }> {
   try {
@@ -382,6 +408,49 @@ export async function getUserDeposits(
   }
 }
 
+
+export async function getAllDepositss(): Promise<{ data?: Deposit[]; error?: string }> {
+  try {
+    // Execute simple query to get all deposits
+    const { data, error } = await supabase
+      .from('deposits')  // Changed from 'getAllDeposits' to 'deposits'
+      .select(`
+        id,
+        amount,
+        crypto_type,
+        status,
+        reference,
+        created_at,
+        processed_at,
+        transaction_hash,
+        admin_notes
+      `)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching deposits:', error);
+      return { error: 'Failed to fetch deposits' };
+    }
+
+    // Simplify the data mapping
+    return {
+      data: data?.map(deposit => ({
+        id: deposit.id,
+        amount: deposit.amount,
+        cryptoType: deposit.crypto_type,
+        status: deposit.status,
+        reference: deposit.reference,
+        createdAt: deposit.created_at,
+        processedAt: deposit.processed_at,
+        transactionHash: deposit.transaction_hash,
+        adminNotes: deposit.admin_notes
+      }))
+    };
+  } catch (err) {
+    console.error('Unexpected error in getAllDeposits:', err);
+    return { error: 'An unexpected error occurred' };
+  }
+}
 // Get all deposits (admin)
 export async function getAllDeposits(
   filters: {
