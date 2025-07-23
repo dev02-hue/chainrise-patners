@@ -3,6 +3,7 @@ import nodemailer from "nodemailer";
 import { cookies } from "next/headers"
 import { supabase } from "./supabaseClient"
 import { getSession } from "./auth"
+import { Deposit, DepositStatus, Withdrawal, WithdrawalStatus } from "@/types/businesses";
 
 
 // Add this type definition near your other type definitions
@@ -212,5 +213,120 @@ type ProfileData = {
     } catch (err) {
       console.error('Unexpected error in updateProfile:', err)
       return { error: 'An unexpected error occurred' }
+    }
+  }
+
+
+  export async function getUserTransactions(
+    type: 'deposits' | 'withdrawals',
+    filters: {
+      status?: DepositStatus | WithdrawalStatus;
+      limit?: number;
+      offset?: number;
+    } = {}
+  ): Promise<{ data?: (Deposit | Withdrawal)[]; error?: string; count?: number }> {
+    try {
+      // 1. Get current session
+      const session = await getSession();
+      if (!session?.user) {
+        return { error: 'Not authenticated' };
+      }
+  
+      const userId = session.user.id;
+  
+      // 2. Build base query based on transaction type
+      let query;
+      
+      if (type === 'deposits') {
+        query = supabase
+          .from('deposits')
+          .select(`
+            id,
+            amount,
+            crypto_type,
+            status,
+            reference,
+            created_at,
+            processed_at,
+            transaction_hash,
+            investment_plans!inner(title)
+          `, { count: 'exact' })
+          .eq('user_id', userId);
+      } else {
+        query = supabase
+          .from('withdrawals')
+          .select(`
+            id,
+            amount,
+            crypto_type,
+            status,
+            reference,
+            created_at,
+            processed_at,
+            wallet_address,
+            admin_notes
+          `, { count: 'exact' })
+          .eq('user_id', userId);
+      }
+  
+      // Apply common ordering
+      query = query.order('created_at', { ascending: false });
+  
+      // 3. Apply filters
+      if (filters.status) {
+        query = query.eq('status', filters.status);
+      }
+  
+      if (filters.limit) {
+        query = query.limit(filters.limit);
+      }
+  
+      if (filters.offset !== undefined && filters.limit) {
+        query = query.range(filters.offset, filters.offset + filters.limit - 1);
+      }
+  
+      // 4. Execute query
+      const { data, error, count } = await query;
+  
+      if (error) {
+        console.error(`Error fetching ${type}:`, error);
+        return { error: `Failed to fetch ${type}` };
+      }
+  
+      // 5. Transform data based on type
+      let transformedData;
+      if (type === 'deposits') {
+        transformedData = data?.map(transaction => ({
+          id: transaction.id,
+          amount: transaction.amount,
+          cryptoType: transaction.crypto_type,
+          status: transaction.status,
+          reference: transaction.reference,
+          createdAt: transaction.created_at,
+          processedAt: transaction.processed_at,
+          // transactionHash: transaction.transaction_hash,
+          // planTitle: transaction.investment_plans[0]?.title 
+        }));
+      } else {
+        transformedData = data?.map(transaction => ({
+          id: transaction.id,
+          amount: transaction.amount,
+          cryptoType: transaction.crypto_type,
+          status: transaction.status,
+          reference: transaction.reference,
+          createdAt: transaction.created_at,
+          processedAt: transaction.processed_at,
+          // walletAddress: transaction.wallet_address,
+          // adminNotes: transaction.admin_notes
+        }));
+      }
+  
+      return {
+        data: transformedData,
+        count: count || 0
+      };
+    } catch (err) {
+      console.error(`Unexpected error in getUserTransactions (${type}):`, err);
+      return { error: 'An unexpected error occurred' };
     }
   }
