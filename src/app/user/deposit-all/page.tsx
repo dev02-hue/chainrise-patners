@@ -71,28 +71,24 @@ const DepositHistoryPage = () => {
         </div>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
-          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-            <thead className="bg-gray-50 dark:bg-gray-800">
+          <table className="min-w-full divide-y divide-gray-200 ">
+            <thead className="bg-gray-50  ">
               <tr>
-                <th className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Plan</th>
-                <th className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
-                <th className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Method</th>
-                <th className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                <th className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                <th className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-black uppercase tracking-wider">Amount</th>
+                <th className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-black uppercase tracking-wider">Method</th>
+                <th className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-black uppercase tracking-wider">Status</th>
+                <th className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-black uppercase tracking-wider">Date</th>
               </tr>
             </thead>
-            <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
+            <tbody className="bg-white   divide-y divide-gray-200 ">
               {deposits.map((deposit) => (
                 <motion.tr
                   key={deposit.id}
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ duration: 0.3 }}
-                  className="hover:bg-gray-50 dark:hover:bg-gray-800"
+                  className="hover:bg-gray-50  "
                 >
-                  <td className="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap">
-                    <div className="text-sm sm:text-base">{deposit.planTitle || 'N/A'}</div>
-                  </td>
                   <td className="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap">
                     <div className="text-sm sm:text-base">${deposit.amount.toFixed(2)}</div>
                   </td>

@@ -101,3 +101,11 @@ export interface Withdrawal {
   userEmail?: string;       // Only for admin views
   username?: string;        // Only for admin views
 }
+
+export type ProfileData = {
+  name: string;
+  username: string;
+  email: string;
+  phoneNumber: string;
+  balance: number;
+};

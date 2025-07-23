@@ -50,7 +50,7 @@ const navItems = [
       { name: "New Withdrawal", href: "/user/withdrawal-new" },
     ],
   },
-  { name: "Transactions", href: "/transactions", icon: <FiActivity className="mr-2" /> },
+  { name: "Transactions", href: "/user/transactions", icon: <FiActivity className="mr-2" /> },
 ];
 
 export default function Navbar() {
