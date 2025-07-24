@@ -1,8 +1,9 @@
+import ReferralStats from '@/app/component/user/profile/ReferralStats'
 import React from 'react'
 
 const page = () => {
   return (
-    <div>page</div>
+    <div><ReferralStats /></div>
   )
 }
 

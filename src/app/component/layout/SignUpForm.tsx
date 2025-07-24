@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
   FaFacebookF,
@@ -12,7 +12,7 @@ import {
 } from "react-icons/fa";
 import { signUp } from "@/lib/auth";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter  } from "next/navigation";
 
 interface FormState {
   name: string;
@@ -21,6 +21,7 @@ interface FormState {
   phoneNumber: string;
   password: string;
   confirmPassword: string;
+  referralCode?: string;
 }
 
 interface FormErrors {
@@ -30,6 +31,7 @@ interface FormErrors {
   phoneNumber?: string;
   password?: string;
   confirmPassword?: string;
+  referralCode?: string;
   form?: string;
 }
 
@@ -40,6 +42,7 @@ const initialState: FormState = {
   phoneNumber: "",
   password: "",
   confirmPassword: "",
+  referralCode: "",
 };
 
 const SignUpForm: React.FC = () => {
@@ -48,6 +51,17 @@ const SignUpForm: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const router = useRouter();
+ 
+  // Check for referral code in URL on component mount
+  const refCode = typeof window !== 'undefined' 
+  ? new URLSearchParams(window.location.search).get('ref')
+  : null;
+
+useEffect(() => {
+  if (refCode) {
+    setForm(prev => ({ ...prev, referralCode: refCode }));
+  }
+}, [refCode]);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
@@ -105,6 +119,7 @@ const SignUpForm: React.FC = () => {
         phoneNumber: form.phoneNumber,
         password: form.password,
         confirmPassword: form.confirmPassword,
+        referralCode: form.referralCode || undefined, // Pass undefined if empty
       });
 
       if (result.error) {
@@ -165,6 +180,11 @@ const SignUpForm: React.FC = () => {
             className="text-gray-600 max-w-md mx-auto lg:mx-0 text-sm sm:text-base"
           >
             Join our platform to access exclusive features and content.
+            {form.referralCode && (
+              <span className="block mt-2 text-emerald-600">
+                Using referral code: <strong>{form.referralCode}</strong>
+              </span>
+            )}
           </motion.p>
           
           <motion.div
@@ -351,6 +371,27 @@ const SignUpForm: React.FC = () => {
                 />
                 {errors.confirmPassword && (
                   <p className="mt-1 text-xs text-red-600">{errors.confirmPassword}</p>
+                )}
+              </div>
+
+              {/* New Referral Code Field */}
+              <div>
+                <label htmlFor="referralCode" className="block text-sm font-medium text-gray-700 mb-1">
+                  Referral Code (optional)
+                </label>
+                <input
+                  id="referralCode"
+                  type="text"
+                  name="referralCode"
+                  placeholder="Enter referral code if you have one"
+                  value={form.referralCode}
+                  onChange={handleChange}
+                  className={`w-full px-4 py-3 text-sm sm:text-base border ${
+                    errors.referralCode ? "border-red-300 focus:ring-red-500" : "border-gray-300 focus:ring-emerald-500"
+                  } rounded-lg focus:ring-2 focus:border-transparent transition placeholder-gray-400`}
+                />
+                {errors.referralCode && (
+                  <p className="mt-1 text-xs text-red-600">{errors.referralCode}</p>
                 )}
               </div>
             </div>

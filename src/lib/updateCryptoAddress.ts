@@ -1,6 +1,7 @@
 "use server";
  import { supabase } from "./supabaseClient";
 import { getSession } from "./auth";
+import { redirect } from "next/navigation";
 
 type CryptoAddressType = 
   | 'btc_address'
@@ -30,6 +31,11 @@ export async function updateCryptoAddress({
     // 1. Get current session
     const { session } = await getSession();
     if (!session?.user) {
+      if (typeof window !== 'undefined') {
+        window.location.href = '/signin';
+      } else {
+        redirect('/signin'); // for use in server-side functions (Next.js App Router only)
+      }
       return { error: 'Not authenticated' };
     }
 
@@ -72,6 +78,11 @@ export async function deleteCryptoAddress({
     // 1. Get current session
     const { session } = await getSession();
     if (!session?.user) {
+      if (typeof window !== 'undefined') {
+        window.location.href = '/signin';
+      } else {
+        redirect('/signin'); // for use in server-side functions (Next.js App Router only)
+      }
       return { error: 'Not authenticated' };
     }
 
@@ -110,6 +121,11 @@ export async function getCryptoAddresses(): Promise<{
     // 1. Get current session
     const { session } = await getSession();
     if (!session?.user) {
+      if (typeof window !== 'undefined') {
+                window.location.href = '/signin';
+              } else {
+                redirect('/signin'); // for use in server-side functions (Next.js App Router only)
+              }
       return { error: 'Not authenticated' };
     }
 

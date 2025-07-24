@@ -105,6 +105,7 @@ export interface Withdrawal {
 export type ProfileData = {
   name: string;
   username: string;
+  referralCode: string;
   email: string;
   phoneNumber: string;
   balance: number;

@@ -1,6 +1,7 @@
 import { ProfileData } from "@/types/businesses";
 import { getSession } from "./auth";
 import { supabase } from "./supabaseClient";
+import { redirect } from "next/navigation";
 
 
 
@@ -11,6 +12,13 @@ export async function getTotalDeposit(): Promise<number> {
   
       if (!session?.user) {
         console.warn('[getTotalDeposit] No authenticated user found');
+      
+        if (typeof window !== 'undefined') {
+          window.location.href = '/signin';
+        } else {
+          redirect('/signin'); // for use in server-side functions (Next.js App Router only)
+        }
+
         return 0;
       }
   
@@ -47,6 +55,12 @@ export async function getTotalDeposit(): Promise<number> {
   
       if (!session?.user) {
         console.warn('[getTotalInvestment] No authenticated user found');
+
+        if (typeof window !== 'undefined') {
+          window.location.href = '/signin';
+        } else {
+          redirect('/signin'); // for use in server-side functions (Next.js App Router only)
+        }
         return 0;
       }
   
@@ -87,6 +101,11 @@ export async function getTotalCompletedWithdrawal(): Promise<number> {
       const session = await getSession();
       if (!session?.user) {
         console.warn('[getTotalCompletedWithdrawal] No session found');
+        if (typeof window !== 'undefined') {
+          window.location.href = '/signin';
+        } else {
+          redirect('/signin'); // for use in server-side functions (Next.js App Router only)
+        }
         return 0;
       }
   
@@ -119,6 +138,11 @@ export async function getTotalCompletedWithdrawal(): Promise<number> {
       const session = await getSession();
       if (!session?.user) {
         console.warn('[getTotalPendingWithdrawal] No session found');
+        if (typeof window !== 'undefined') {
+          window.location.href = '/signin';
+        } else {
+          redirect('/signin'); // for use in server-side functions (Next.js App Router only)
+        }
         return 0;
       }
   
@@ -151,13 +175,18 @@ export async function getTotalCompletedWithdrawal(): Promise<number> {
       // 1. Get current session
       const { session } = await getSession();
       if (!session?.user) {
+        if (typeof window !== 'undefined') {
+          window.location.href = '/signin';
+        } else {
+          redirect('/signin'); // for use in server-side functions (Next.js App Router only)
+        }
         return { error: 'Not authenticated' };
       }
   
       // 2. Fetch profile data including balance
       const { data: profile, error } = await supabase
         .from('accilent_profile')
-        .select('name, username, email, phone_number, balance')
+        .select('name,referral_code, username, email, phone_number, balance')
         .eq('id', session.user.id)
         .single();
   
@@ -171,6 +200,7 @@ export async function getTotalCompletedWithdrawal(): Promise<number> {
         data: {
           name: profile.name,
           username: profile.username,
+          referralCode: profile.referral_code,
           email: profile.email,
           phoneNumber: profile.phone_number,
           balance: profile.balance,

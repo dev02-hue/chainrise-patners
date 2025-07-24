@@ -1,4 +1,5 @@
 "use server";
+import { redirect } from "next/navigation";
 import { getSession } from "./auth";
 import { supabase } from "./supabaseClient";
 
@@ -49,6 +50,11 @@ export async function createInvestment(
     const session = await getSession();
     if (!session?.user) {
       console.log('No session found - not authenticated');
+      if (typeof window !== 'undefined') {
+                window.location.href = '/signin';
+              } else {
+                redirect('/signin'); // for use in server-side functions (Next.js App Router only)
+              }
       return { error: 'Not authenticated' };
     }
 
@@ -208,6 +214,11 @@ export async function getUserInvestments(): Promise<{ data?: UserInvestment[]; e
   try {
     const session = await getSession();
     if (!session?.user) {
+      if (typeof window !== 'undefined') {
+        window.location.href = '/signin';
+      } else {
+        redirect('/signin'); // for use in server-side functions (Next.js App Router only)
+      }
       return { error: 'Not authenticated' };
     }
 
@@ -275,6 +286,11 @@ export async function getInvestmentById(
   try {
     const session = await getSession();
     if (!session?.user) {
+      if (typeof window !== 'undefined') {
+        window.location.href = '/signin';
+      } else {
+        redirect('/signin'); // for use in server-side functions (Next.js App Router only)
+      }
       return { error: 'Not authenticated' };
     }
 

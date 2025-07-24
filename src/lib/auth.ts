@@ -5,6 +5,7 @@ import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import { v4 as uuidv4 } from 'uuid'
 import nodemailer from 'nodemailer'
+import { processReferralBonus } from './referral'
 
 type SignUpInput = {
   name: string
@@ -13,7 +14,9 @@ type SignUpInput = {
   phoneNumber: string
   password: string
   confirmPassword: string
+  referralCode?: string 
 }
+const SIGNUP_BONUS_AMOUNT = 5;
 
 type SignInInput = {
   emailOrUsername: string
@@ -30,6 +33,15 @@ type ConfirmResetPasswordInput = {
   confirmNewPassword: string
 }
 
+function generateReferralCode(length = 8): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let result = '';
+  for (let i = 0; i < length; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}
+
 export async function signUp({
   name,
   email,
@@ -37,6 +49,7 @@ export async function signUp({
   phoneNumber,
   password,
   confirmPassword,
+  referralCode, // Added referral code parameter
 }: SignUpInput) {
   try {
     // 1. Validate input
@@ -50,7 +63,7 @@ export async function signUp({
     // 2. Check if username, email or phone already exists
     const { data: existingUser, error: lookupError } = await supabase
       .from('accilent_profile')
-      .select('username, email, phone_number')
+      .select('username, email, phone_number, referral_code')
       .or(`username.eq.${username},email.eq.${email},phone_number.eq.${phoneNumber}`)
 
     if (lookupError) {
@@ -70,7 +83,48 @@ export async function signUp({
       }
     }
 
-    // 3. Create user in Supabase Auth
+    // 2b. Validate referral code if provided
+    let referredByUserId: string | null = null;
+    if (referralCode) {
+      const { data: referrerData, error: referrerError } = await supabase
+        .from('accilent_profile')
+        .select('id')
+        .eq('referral_code', referralCode)
+        .single();
+
+      if (referrerError || !referrerData) {
+        return { error: 'Invalid referral code' };
+      }
+      referredByUserId = referrerData.id;
+    }
+
+    // 3. Generate a unique referral code for the new user
+    let referralCodeForNewUser = generateReferralCode();
+    let isCodeUnique = false;
+    let attempts = 0;
+    const maxAttempts = 5;
+
+    // Ensure the generated code is unique
+    while (!isCodeUnique && attempts < maxAttempts) {
+      attempts++;
+      const { data: existingCode } = await supabase
+        .from('accilent_profile')
+        .select('referral_code')
+        .eq('referral_code', referralCodeForNewUser)
+        .single();
+
+      if (!existingCode) {
+        isCodeUnique = true;
+      } else {
+        referralCodeForNewUser = generateReferralCode();
+      }
+    }
+
+    if (!isCodeUnique) {
+      return { error: 'Failed to generate unique referral code. Please try again.' };
+    }
+
+    // 4. Create user in Supabase Auth
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email,
       password,
@@ -91,7 +145,7 @@ export async function signUp({
 
     const userId = authData.user.id
 
-    // 4. Create user profile
+    // 5. Create user profile with referral data
     const now = new Date().toISOString()
     const { error: profileError } = await supabase.from('accilent_profile').insert([{
       id: userId,
@@ -99,6 +153,8 @@ export async function signUp({
       username,
       email,
       phone_number: phoneNumber,
+      referral_code: referralCodeForNewUser,
+      referred_by: referredByUserId,
       created_at: now,
       updated_at: now,
     }])
@@ -108,7 +164,28 @@ export async function signUp({
       return { error: 'Failed to create profile: ' + profileError.message }
     }
 
-    // 5. Send welcome email
+    // 6. Update referrer's stats if applicable
+    // 6. If this user was referred, process the referral bonus
+    if (referredByUserId) {
+      // First update referrer's stats
+      await supabase.rpc('increment_referral_count', {
+        user_id: referredByUserId
+      }).then(({ error }) => {
+        if (error) {
+          console.error('Failed to update referrer stats:', error);
+        }
+      });
+
+      // Process signup bonus (if you want to award for signup, not deposit)
+      const SIGNUP_BONUS_AMOUNT = 5; // Example: $10 bonus for referred signup
+      const bonusResult = await processReferralBonus(userId, SIGNUP_BONUS_AMOUNT);
+      
+      if (bonusResult.error) {
+        console.error('Referral bonus processing failed:', bonusResult.error);
+       }
+    }
+
+    // 7. Send welcome email (with referral code)
     try {
       const transporter = nodemailer.createTransport({
         service: 'gmail',
@@ -126,6 +203,8 @@ export async function signUp({
           <p>Hello ${name},</p>
           <p>Thank you for registering with Accilent!</p>
           <p>Your username: <strong>${username}</strong></p>
+          <p>Your unique referral code: <strong>${referralCodeForNewUser}</strong></p>
+          <p>Share this code with friends to earn rewards!</p>
           <p>Please click the link below to verify your email address:</p>
           <p><a href="${process.env.NEXT_PUBLIC_SITE_URL}/auth/confirm-email?token=${authData.session?.access_token}">Verify Email</a></p>
           <p>If you didn't create this account, please contact support immediately.</p>
@@ -142,6 +221,9 @@ export async function signUp({
       user: authData.user,
       session: authData.session,
       message: 'Signup successful! Please check your email for confirmation.',
+      referralCode: referralCodeForNewUser,
+      wasReferred: !!referredByUserId,
+      signupBonus: referredByUserId ? SIGNUP_BONUS_AMOUNT : 0
     }
   } catch (err) {
     console.error('Unexpected signup error:', err)

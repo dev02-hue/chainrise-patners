@@ -4,6 +4,7 @@ import { getSession } from "./auth";
 import { supabase } from "./supabaseClient";
 import nodemailer from "nodemailer";
 import { sendWithdrawalNotificationToAdmin } from "./email";
+import { redirect } from "next/navigation";
 
 // Initiate a withdrawal request
 export async function initiateWithdrawal({
@@ -23,6 +24,11 @@ export async function initiateWithdrawal({
       const session = await getSession();
       if (!session?.user) {
         console.warn('[initiateWithdrawal] No authenticated user found');
+        if (typeof window !== 'undefined') {
+                  window.location.href = '/signin';
+                } else {
+                  redirect('/signin'); // for use in server-side functions (Next.js App Router only)
+                }
         return { error: 'Not authenticated' };
       }
       console.log('[initiateWithdrawal] User authenticated:', session.user.id);
@@ -248,6 +254,11 @@ export async function getUserWithdrawals(
     // 1. Get current session
     const session = await getSession();
     if (!session?.user) {
+      if (typeof window !== 'undefined') {
+        window.location.href = '/signin';
+      } else {
+        redirect('/signin'); // for use in server-side functions (Next.js App Router only)
+      }
       return { error: 'Not authenticated' };
     }
 

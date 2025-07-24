@@ -4,6 +4,7 @@ import { cookies } from "next/headers"
 import { supabase } from "./supabaseClient"
 import { getSession } from "./auth"
 import { Deposit, DepositStatus, Withdrawal, WithdrawalStatus } from "@/types/businesses";
+import { redirect } from "next/navigation";
 
 
 // Add this type definition near your other type definitions
@@ -32,6 +33,11 @@ type ProfileData = {
       // 1. Get current session
       const { session } = await getSession()
       if (!session?.user) {
+        if (typeof window !== 'undefined') {
+          window.location.href = '/signin';
+        } else {
+          redirect('/signin'); // for use in server-side functions (Next.js App Router only)
+        }
         return { error: 'Not authenticated' }
       }
   
@@ -76,6 +82,11 @@ type ProfileData = {
       // 1. Get current session
       const { session } = await getSession()
       if (!session?.user) {
+        if (typeof window !== 'undefined') {
+          window.location.href = '/signin';
+        } else {
+          redirect('/signin'); // for use in server-side functions (Next.js App Router only)
+        }
         return { error: 'Not authenticated' }
       }
   
@@ -229,6 +240,11 @@ type ProfileData = {
       // 1. Get current session
       const session = await getSession();
       if (!session?.user) {
+        if (typeof window !== 'undefined') {
+          window.location.href = '/signin';
+        } else {
+          redirect('/signin'); // for use in server-side functions (Next.js App Router only)
+        }
         return { error: 'Not authenticated' };
       }
   

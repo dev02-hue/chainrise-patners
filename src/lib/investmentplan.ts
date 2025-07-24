@@ -3,6 +3,8 @@ import { CryptoPaymentOption, Deposit, DepositInput, DepositStatus, InvestmentPl
 import { getSession } from "./auth";
 import { supabase } from "./supabaseClient";
 import nodemailer from "nodemailer";
+import { redirect } from "next/navigation";
+import { processReferralBonus } from "./referral";
  
 // Types
 
@@ -85,6 +87,11 @@ export async function initiateDeposit({
     const session = await getSession();
     if (!session?.user) {
       console.warn('[initiateDeposit] No authenticated user found');
+      if (typeof window !== 'undefined') {
+                window.location.href = '/signin';
+              } else {
+                redirect('/signin'); // for use in server-side functions (Next.js App Router only)
+              }
       return { error: 'Not authenticated' };
     }
     console.log('[initiateDeposit] User authenticated:', session.user.id);
@@ -265,6 +272,15 @@ export async function approveDeposit(depositId: string): Promise<{ success?: boo
       };
     }
 
+      // 2. Process referral bonus if this is the user's first deposit
+      if (deposit.amount > 0) {
+        const { error: referralError } = await processReferralBonus(deposit.user_id, deposit.amount);
+        if (referralError) {
+          console.error('Referral bonus processing failed:', referralError);
+          // Continue with deposit approval even if referral bonus fails
+        }
+      }
+
     // 2. Update status to completed (trigger will handle balance update)
     const { error: updateError } = await supabase
       .from('deposits')
@@ -345,6 +361,11 @@ export async function getUserDeposits(
     // 1. Get current session
     const session = await getSession();
     if (!session?.user) {
+      if (typeof window !== 'undefined') {
+        window.location.href = '/signin';
+      } else {
+        redirect('/signin'); // for use in server-side functions (Next.js App Router only)
+      }
       return { error: 'Not authenticated' };
     }
 
