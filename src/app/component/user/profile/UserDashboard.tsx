@@ -69,7 +69,7 @@ const UserDashboard: React.FC = () => {
 
         setUser({
           username: profileData.data.username,
-          referralLink: `https://accilent.it.com/?ref_id=${profileData.data.username}`
+          referralLink: `https://accilent.it.com/signup?ref_id=${profileData.data.referralCode}`
         });
 
         setUserStats({
