@@ -6,6 +6,7 @@ import { cookies } from 'next/headers'
 import { v4 as uuidv4 } from 'uuid'
 import nodemailer from 'nodemailer'
 import { processReferralBonus } from './referral'
+import { redirect } from 'next/navigation'
 
 type SignUpInput = {
   name: string
@@ -506,6 +507,11 @@ export async function getSession() {
     const refreshToken = cookieStore.get('sb-refresh-token')?.value
 
     if (!accessToken || !refreshToken) {
+      if (typeof window !== 'undefined') {
+                window.location.href = '/signin';
+              } else {
+                redirect('/signin'); // for use in server-side functions (Next.js App Router only)
+              }
       return { session: null, user: null }
     }
 

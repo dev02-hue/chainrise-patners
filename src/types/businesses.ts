@@ -110,3 +110,49 @@ export type ProfileData = {
   phoneNumber: string;
   balance: number;
 };
+
+export type UpdateInvestmentPlanInput = {
+  id: number;
+  title?: string;
+  percentage?: number;
+  min_amount?: number;
+  max_amount?: number;
+  duration_days?: number;
+  interval?: string;
+  referral_bonus?: number;
+};
+
+export type UpdateUserProfileInput = {
+  id: string;
+  name?: string;
+  username?: string;
+  email?: string;
+  phoneNumber?: string;
+  balance?: number;
+};
+
+
+export type Profile = {
+  id: string;
+  name: string;
+  username: string;
+  balance: number;
+  email: string;
+  phoneNumber: string;
+};
+
+export  type UpdateProfileInput = {
+  name?: string
+  username?: string
+  email?: string
+  phoneNumber?: string
+  currentPassword?: string // Needed for email changes
+}
+
+// export type ProfileData = {
+//   name: string
+//   username: string
+//   email: string
+//   phoneNumber: string
+// }
+

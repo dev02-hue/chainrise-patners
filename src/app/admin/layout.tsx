@@ -3,9 +3,8 @@
 import Link from "next/link";
 import { ReactNode, useState } from "react";
 import { AiFillTrademarkCircle } from "react-icons/ai";
-import { FiUsers, FiUpload, FiDownload, FiFileText, FiSettings, FiMenu, FiX } from "react-icons/fi";
-import { MdAccountBalanceWallet } from "react-icons/md";
-
+import { FiUsers, FiUpload, FiDownload, FiMenu, FiX } from "react-icons/fi";
+ 
 export default function AdminLayout({ children }: { children: ReactNode }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
@@ -29,7 +28,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         <h2 className="text-2xl font-bold mb-6 hidden md:block">Admin Panel</h2>
         <nav className="space-y-2">
           <Link 
-            href="/admin/users" 
+            href="/admin" 
             className="flex items-center hover:bg-gray-700 px-4 py-2 rounded gap-2"
             onClick={() => setIsSidebarOpen(false)}
           >
@@ -42,13 +41,13 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           >
             <FiUpload /> All Deposits
           </Link>
-          <Link 
+          {/* <Link 
             href="/admin/wallet" 
             className="flex items-center hover:bg-gray-700 px-4 py-2 rounded gap-2"
             onClick={() => setIsSidebarOpen(false)}
           >
             <MdAccountBalanceWallet /> All wallet phrases
-          </Link>
+          </Link> */}
           <Link 
             href="/admin/withdrawal" 
             className="flex items-center hover:bg-gray-700 px-4 py-2 rounded gap-2"
@@ -56,20 +55,20 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           >
             <FiDownload /> All Withdrawals
           </Link>
-          <Link 
+          {/* <Link 
             href="/admin/all" 
             className="flex items-center hover:bg-gray-700 px-4 py-2 rounded gap-2"
             onClick={() => setIsSidebarOpen(false)}
           >
             <FiDownload />Withdrawals Table
-          </Link>
-          <Link 
+          </Link> */}
+          {/* <Link 
             href="/admin/verification" 
             className="flex items-center hover:bg-gray-700 px-4 py-2 rounded gap-2"
             onClick={() => setIsSidebarOpen(false)}
           >
             <FiFileText />User verification
-          </Link>
+          </Link> */}
           <Link 
             href="/admin/investment-plans" 
             className="flex items-center hover:bg-gray-700 px-4 py-2 rounded gap-2"
@@ -78,13 +77,13 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
             <AiFillTrademarkCircle />Investment Plans Management
 
           </Link>
-          <Link 
+          {/* <Link 
             href="/admin/settings" 
             className="flex items-center hover:bg-gray-700 px-4 py-2 rounded gap-2"
             onClick={() => setIsSidebarOpen(false)}
           >
             <FiSettings /> Settings
-          </Link>
+          </Link> */}
         </nav>
       </aside>
 
