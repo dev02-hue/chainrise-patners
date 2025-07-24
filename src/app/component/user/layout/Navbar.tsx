@@ -1,5 +1,5 @@
 "use client";
-import { useState  } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
@@ -11,8 +11,57 @@ import {
   FiCreditCard, 
   FiActivity, 
   FiMenu,
-  FiX
+  FiX,
+  FiLogOut
 } from "react-icons/fi";
+import { useRouter } from 'next/navigation';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { signOut } from '@/lib/auth';
+
+const SignOutButton = () => {
+  const router = useRouter();
+  const supabase = createClientComponentClient();
+
+  const handleSignOut = async () => {
+    try {
+      // First call the server action to handle server-side sign out
+      const result = await signOut();
+      
+      if (result.error) {
+        console.error('Sign out error:', result.error);
+        alert('Failed to sign out. Please try again.');
+        return;
+      }
+
+      // Then handle client-side sign out with Supabase
+      const { error } = await supabase.auth.signOut();
+      
+      if (error) {
+        console.error('Supabase sign out error:', error.message);
+        alert('Failed to sign out. Please try again.');
+        return;
+      }
+
+      // Redirect to home page after successful sign out
+      router.push('/signin');
+      router.refresh(); // Ensure the page updates with the new auth state
+
+    } catch (err) {
+      console.error('Unexpected sign out error:', err);
+      alert('An unexpected error occurred during sign out.');
+    }
+  };
+
+  return (
+    <button
+      onClick={handleSignOut}
+      className="flex items-center w-full py-3 px-3 text-gray-300 hover:text-emerald-400 rounded-lg hover:bg-gray-700"
+    >
+      <FiLogOut className="mr-2" />
+      <span>Sign Out</span>
+    </button>
+  );
+};
 
 const navItems = [
   { name: "Dashboard", href: "/user/dashboard", icon: <FiHome className="mr-2" /> },
@@ -56,20 +105,6 @@ const navItems = [
 export default function Navbar() {
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-//   const [isMobile, setIsMobile] = useState(false);
-
-//   useEffect(() => {
-//     const handleResize = () => {
-//       setIsMobile(window.innerWidth < 1024);
-//       if (window.innerWidth >= 1024) {
-//         setMobileMenuOpen(false);
-//       }
-//     };
-
-//     handleResize();
-//     window.addEventListener('resize', handleResize);
-//     return () => window.removeEventListener('resize', handleResize);
-//   }, []);
 
   const toggleMobileMenu = () => {
     setMobileMenuOpen(!mobileMenuOpen);
@@ -165,10 +200,13 @@ export default function Navbar() {
           </ul>
         </div>
 
-        {/* User profile placeholder */}
-        <div className="ml-8 flex items-center">
+        {/* User profile and sign out */}
+        <div className="ml-8 flex items-center space-x-4">
           <div className="w-9 h-9 rounded-full bg-gray-700 flex items-center justify-center border border-emerald-400/30">
             <FiUser className="text-emerald-400" />
+          </div>
+          <div className="hidden lg:block">
+            <SignOutButton />
           </div>
         </div>
       </nav>
@@ -272,6 +310,10 @@ export default function Navbar() {
                       )}
                     </li>
                   ))}
+                  {/* Mobile Sign Out Button */}
+                  <li>
+                    <SignOutButton />
+                  </li>
                 </ul>
               </nav>
             </motion.div>

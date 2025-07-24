@@ -3,7 +3,7 @@ import nodemailer from "nodemailer";
 import { cookies } from "next/headers"
 import { supabase } from "./supabaseClient"
 import { getSession } from "./auth"
-import { Deposit, DepositStatus, Withdrawal, WithdrawalStatus } from "@/types/businesses";
+import { Deposit, DepositStatus, Profile, UpdateProfileInput, UpdateUserProfileInput, Withdrawal, WithdrawalStatus } from "@/types/businesses";
 import { redirect } from "next/navigation";
 
 
@@ -15,16 +15,86 @@ type ProfileData = {
     phoneNumber: string
   }
   
-  type UpdateProfileInput = {
-    name?: string
-    username?: string
-    email?: string
-    phoneNumber?: string
-    currentPassword?: string // Needed for email changes
+
+  export async function updateUserProfile(input: UpdateUserProfileInput): Promise<{ success: boolean; error?: string }> {
+    try {
+      const { session } = await getSession();
+      if (!session?.user) {
+        if (typeof window !== 'undefined') {
+          window.location.href = '/signin';
+        } else {
+          redirect('/signin');
+        }
+        return { success: false, error: 'Not authenticated' };
+      }
+  
+      const { id, name, username, email, phoneNumber, balance } = input;
+  
+      const { error } = await supabase
+        .from('accilent_profile')
+        .update({
+          name,
+          username,
+          email,
+          phone_number: phoneNumber,
+          balance,
+          updated_at: new Date().toISOString() 
+        })
+        .eq('id', id);
+  
+      if (error) {
+        console.error('Error updating user profile:', error);
+        return { success: false, error: 'Failed to update profile' };
+      }
+  
+      return { success: true };
+    } catch (err) {
+      console.error('Unexpected error in updateUserProfile:', err);
+      return { success: false, error: 'An unexpected error occurred' };
+    }
   }
+ 
   
-  // Add these new functions to your auth.ts file:
+  export async function getAllProfiles(): Promise<{ data?: Profile[]; error?: string }> {
+    try {
+      // 1. Ensure user is authenticated
+      const { session } = await getSession();
+      if (!session?.user) {
+        if (typeof window !== 'undefined') {
+          window.location.href = '/signin';
+        } else {
+          redirect('/signin');
+        }
+        return { error: 'Not authenticated' };
+      }
   
+      // 2. Fetch all profiles
+      const { data: profiles, error } = await supabase
+        .from('accilent_profile')
+        .select('id, name, username, email, phone_number, balance');
+  
+      if (error || !profiles) {
+        console.error('Error fetching all profiles:', error);
+        return { error: 'Failed to fetch profiles' };
+      }
+  
+      // 3. Return formatted profiles
+      const formatted = profiles.map(profile => ({
+        id: profile.id,
+        name: profile.name,
+        username: profile.username,
+        email: profile.email,
+        balance: profile.balance || 0, // Default to 0 if balance is null
+        phoneNumber: profile.phone_number,
+      }));
+  
+      return { data: formatted };
+    } catch (err) {
+      console.error('Unexpected error in getAllProfiles:', err);
+      return { error: 'An unexpected error occurred' };
+    }
+  }
+   
   /**
    * Fetches the current user's profile data
    */

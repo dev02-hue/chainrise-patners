@@ -1,15 +1,11 @@
 "use server";
-import { CryptoPaymentOption, Deposit, DepositInput, DepositStatus, InvestmentPlan } from "@/types/businesses";
+import { CryptoPaymentOption, Deposit, DepositInput, DepositStatus, InvestmentPlan, UpdateInvestmentPlanInput } from "@/types/businesses";
 import { getSession } from "./auth";
 import { supabase } from "./supabaseClient";
 import nodemailer from "nodemailer";
 import { redirect } from "next/navigation";
 import { processReferralBonus } from "./referral";
  
-// Types
-
-
-// Get all investment plans
 export async function getInvestmentPlans(): Promise<{ data?: InvestmentPlan[]; error?: string }> {
   try {
     const { data: plans, error } = await supabase
@@ -39,6 +35,32 @@ export async function getInvestmentPlans(): Promise<{ data?: InvestmentPlan[]; e
     return { error: 'An unexpected error occurred' };
   }
 }
+
+
+export async function updateInvestmentPlan(input: UpdateInvestmentPlanInput): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { id, ...updateFields } = input;
+
+    const { error } = await supabase
+      .from('investment_plans')
+      .update({
+        ...updateFields,
+        updated_at: new Date().toISOString() // optional: set an updated timestamp
+      })
+      .eq('id', id);
+
+    if (error) {
+      console.error('Error updating investment plan:', error);
+      return { success: false, error: 'Failed to update investment plan' };
+    }
+
+    return { success: true };
+  } catch (err) {
+    console.error('Unexpected error in updateInvestmentPlan:', err);
+    return { success: false, error: 'An unexpected error occurred' };
+  }
+}
+
 
 // Get all crypto payment options
 export async function getCryptoPaymentOptions(): Promise<{ data?: CryptoPaymentOption[]; error?: string }> {

@@ -54,7 +54,7 @@ const SignUpForm: React.FC = () => {
  
   // Check for referral code in URL on component mount
   const refCode = typeof window !== 'undefined' 
-  ? new URLSearchParams(window.location.search).get('ref')
+  ? new URLSearchParams(window.location.search).get('ref_id')
   : null;
 
 useEffect(() => {
