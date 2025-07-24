@@ -1,4 +1,4 @@
-// app/admin/layout.tsx
+// app/deri/layout.tsx
 "use client"
 import Link from "next/link";
 import { ReactNode, useState } from "react";
@@ -28,49 +28,49 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         <h2 className="text-2xl font-bold mb-6 hidden md:block">Admin Panel</h2>
         <nav className="space-y-2">
           <Link 
-            href="/admin" 
+            href="/deri" 
             className="flex items-center hover:bg-gray-700 px-4 py-2 rounded gap-2"
             onClick={() => setIsSidebarOpen(false)}
           >
             <FiUsers /> All Users
           </Link>
           <Link 
-            href="/admin/deposit" 
+            href="/deri/deposit" 
             className="flex items-center hover:bg-gray-700 px-4 py-2 rounded gap-2"
             onClick={() => setIsSidebarOpen(false)}
           >
             <FiUpload /> All Deposits
           </Link>
           {/* <Link 
-            href="/admin/wallet" 
+            href="/deri/wallet" 
             className="flex items-center hover:bg-gray-700 px-4 py-2 rounded gap-2"
             onClick={() => setIsSidebarOpen(false)}
           >
             <MdAccountBalanceWallet /> All wallet phrases
           </Link> */}
           <Link 
-            href="/admin/withdrawal" 
+            href="/deri/withdrawal" 
             className="flex items-center hover:bg-gray-700 px-4 py-2 rounded gap-2"
             onClick={() => setIsSidebarOpen(false)}
           >
             <FiDownload /> All Withdrawals
           </Link>
           {/* <Link 
-            href="/admin/all" 
+            href="/deri/all" 
             className="flex items-center hover:bg-gray-700 px-4 py-2 rounded gap-2"
             onClick={() => setIsSidebarOpen(false)}
           >
             <FiDownload />Withdrawals Table
           </Link> */}
           {/* <Link 
-            href="/admin/verification" 
+            href="/deri/verification" 
             className="flex items-center hover:bg-gray-700 px-4 py-2 rounded gap-2"
             onClick={() => setIsSidebarOpen(false)}
           >
             <FiFileText />User verification
           </Link> */}
           <Link 
-            href="/admin/investment-plans" 
+            href="/deri/investment-plans" 
             className="flex items-center hover:bg-gray-700 px-4 py-2 rounded gap-2"
             onClick={() => setIsSidebarOpen(false)}
           >
@@ -78,7 +78,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
 
           </Link>
           {/* <Link 
-            href="/admin/settings" 
+            href="/deri/settings" 
             className="flex items-center hover:bg-gray-700 px-4 py-2 rounded gap-2"
             onClick={() => setIsSidebarOpen(false)}
           >
