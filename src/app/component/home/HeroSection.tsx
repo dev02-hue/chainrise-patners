@@ -50,7 +50,7 @@ export default function HeroSection() {
             variants={fadeUp}
             className="mb-8 max-w-prose text-base leading-relaxed text-gray-700 sm:text-lg sm:leading-relaxed md:mb-10"
           >
-            Join us at Accilent Finance Limited, where the extraordinary becomes
+            Join us at ChainRise-Patners, where the extraordinary becomes
             the norm. Embark on this journey with us, and let&#39;s shape a
             brighter, more prosperous future together.
           </motion.p>

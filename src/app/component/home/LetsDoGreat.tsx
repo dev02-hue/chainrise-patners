@@ -39,7 +39,7 @@ const LetsDoGreat = () => {
           transition={{ delay: 0.3, duration: 0.6 }}
           className="text-sm md:text-base text-gray-200"
         >
-          Join Accilent Finance Limited Investment Platform today and take the first step towards a prosperous financial future.
+          Join ChainRise-Patners Investment Platform today and take the first step towards a prosperous financial future.
         </motion.p>
       </div>
 

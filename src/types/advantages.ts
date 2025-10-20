@@ -8,7 +8,7 @@ export const advantages = [
     {
       title: "Diversified Investment Portfolio",
       description:
-        "Accilent Finance Limited offers a unique advantage through its diversified investment portfolio that spans across real estate, agriculture, crypto mining, and stock trading. This multi-sector approach not only reduces risk but also provides multiple streams of potential returns, ensuring your investments are resilient and well-balanced.",
+        "ChainRise-Patners offers a unique advantage through its diversified investment portfolio that spans across real estate, agriculture, crypto mining, and stock trading. This multi-sector approach not only reduces risk but also provides multiple streams of potential returns, ensuring your investments are resilient and well-balanced.",
       image: "/cardmapr-nl-rDzI7m7sjPE-unsplash.jpg",
     },
     {
@@ -20,7 +20,7 @@ export const advantages = [
     {
       title: "Innovative Technology and Data-Driven Insights",
       description:
-        "At Accilent Finance Limited, we leverage the latest technology and data analytics to optimize investment strategies. Our tools enable us to analyze market trends in real-time and make informed decisions that deliver strong returns.",
+        "At ChainRise-Patners, we leverage the latest technology and data analytics to optimize investment strategies. Our tools enable us to analyze market trends in real-time and make informed decisions that deliver strong returns.",
       image: "/windows-6G6akT8biLg-unsplash.jpg",
     },
   ];

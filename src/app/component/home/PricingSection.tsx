@@ -1,48 +1,61 @@
 "use client";
 
 import { motion, Variants } from "framer-motion";
-import { FaRegCreditCard, FaChartLine, FaCoins, FaGem } from "react-icons/fa";
+import { FaRegCreditCard, FaChartLine, FaCoins, FaGem, FaCrown } from "react-icons/fa";
 import Image from "next/image";
 import { useEffect, useRef } from "react";
 
 const plans = [
   {
-    title: "Starter",
-    percentage: 5,
+    title: "Plan 1",
+    percentage: 2.20,
     min: "$100.00",
-    max: "$5,000.00",
-    duration: "Three Days",
+    max: "$2,999.00",
+    duration: "Daily",
     interval: "Daily",
     referral: "10%",
-    image: "/premium_photo-1682309799578-6e685bacd4e1.avif", // Path to your image
+    image: "/premium_photo-1682309799578-6e685bacd4e1.avif",
     icon: <FaCoins className="text-yellow-500" />,
-    features: ["Ideal for beginners", "Low risk", "Quick returns"],
+    features: ["Daily profits", "Low risk", "Quick returns"],
     popular: false,
   },
   {
-    title: "Advanced",
-    percentage: 8,
-    min: "$5,000.00",
-    max: "$11,500.00",
-    duration: "Four Days",
+    title: "Plan 2",
+    percentage: 4.40,
+    min: "$3,000.00",
+    max: "$9,999.00",
+    duration: "Daily",
     interval: "Daily",
     referral: "10%",
-    image: "/premium_photo-1682309799578-6e685bacd4e1.avif", // Path to your image
+    image: "/premium_photo-1682309799578-6e685bacd4e1.avif",
     icon: <FaChartLine className="text-blue-500" />,
-    features: ["Balanced growth", "Medium risk", "Priority support"],
+    features: ["Daily profits", "Medium risk", "Balanced growth"],
     popular: true,
   },
   {
-    title: "Professional",
-    percentage: 10,
-    min: "$11,500.00",
-    max: "$100,000.00",
-    duration: "Five Days",
+    title: "Plan 3",
+    percentage: 6.60,
+    min: "$10,000.00",
+    max: "$29,999.00",
+    duration: "Daily",
     interval: "Daily",
     referral: "10%",
-    image: "/premium_photo-1682309799578-6e685bacd4e1.avif", // Path to your image
+    image: "/premium_photo-1682309799578-6e685bacd4e1.avif",
     icon: <FaGem className="text-purple-500" />,
-    features: ["High returns", "VIP services", "Personal advisor"],
+    features: ["Daily profits", "High returns", "Priority support"],
+    popular: false,
+  },
+  {
+    title: "Plan 4",
+    percentage: 8.80,
+    min: "$30,000.00",
+    max: "$59,999.00",
+    duration: "Daily",
+    interval: "Daily",
+    referral: "10%",
+    image: "/premium_photo-1682309799578-6e685bacd4e1.avif",
+    icon: <FaCrown className="text-gold-500" />, // You might want to add this icon
+    features: ["Daily profits", "VIP services", "Personal advisor"],
     popular: false,
   },
 ];

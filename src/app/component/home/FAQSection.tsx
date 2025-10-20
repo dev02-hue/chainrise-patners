@@ -6,7 +6,7 @@ import { FiPlus, FiMinus } from 'react-icons/fi';
 
 const faqs = [
   {
-    question: "How do I create an account with Accilent Finance?",
+    question: "How do I create an account with ChainRise-Patners?",
     answer: "Creating an account is simple. Click on the 'Get started' button at the top right corner of our website, fill in your details. The entire process takes less than 5 minutes."
   },
   {
@@ -15,10 +15,10 @@ const faqs = [
   },
   {
     question: "How often are profits paid out?",
-    answer: "Profits are paid daily, directly to your Accilent Finance wallet. You can withdraw these earnings or reinvest them to compound your returns."
+    answer: "Profits are paid daily, directly to your ChainRise-Patners wallet. You can withdraw these earnings or reinvest them to compound your returns."
   },
   {
-    question: "Is my investment secure with Accilent Finance?",
+    question: "Is my investment secure with ChainRise-Patners?",
     answer: "We employ bank-level security measures including 256-bit SSL encryption, two-factor authentication, and segregated client accounts. Your capital security is our top priority."
   },
   {

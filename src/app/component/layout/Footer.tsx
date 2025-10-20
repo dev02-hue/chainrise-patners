@@ -16,7 +16,7 @@ const Footer = () => {
       <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-12 border-b border-white/10 pb-10">
         {/* Logo & Description */}
         <div className="space-y-6">
-          <h2 className="text-3xl font-bold text-lime-500">Accilent</h2>
+          <h2 className="text-3xl font-bold text-lime-500">ChainRise-Patners</h2>
           <p className="text-sm leading-relaxed text-gray-200">
             We are an international financial company engaged in investment
             activities, which are related to trading on financial markets and
@@ -63,7 +63,7 @@ const Footer = () => {
             </li>
             <li className="flex items-center gap-2">
               <FaEnvelope className="text-lime-400" />
-              <span>support@accilentfinlimited.com</span>
+              <span>support@ChainRisePatners.com</span>
             </li>
             <li className="flex items-start gap-2">
               <FaMapMarkerAlt className="text-lime-400 mt-1" />
@@ -79,7 +79,7 @@ const Footer = () => {
 
       {/* Bottom Bar */}
       <div className="text-xs text-gray-400 pt-6 flex flex-col md:flex-row items-center justify-between gap-4">
-        <p>© Accilent Finance Limited 2020 | All Rights Reserved</p>
+        <p>© ChainRise-Patners 2020 | All Rights Reserved</p>
         <div className="flex gap-6">
           <a href="#">Privacy</a>
           <a href="#">Terms</a>

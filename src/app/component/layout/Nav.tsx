@@ -31,7 +31,7 @@ export default function Nav() {
       <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 md:px-8">
         {/* Logo */}
         <Link href="/" className="text-2xl font-bold">
-          <span className="text-green-600">A</span>ccilent
+          <span className="text-green-600">C</span>hainRise-Patners
         </Link>
 
         {/* Nav links – desktop */}

@@ -24,7 +24,7 @@ const AboutUs = () => {
         </h2>
 
         <p className="text-gray-600 text-base leading-relaxed">
-          Welcome to Accilent Finance Limited Investment Platform, your premier
+          Welcome to ChainRise-Patners Investment Platform, your premier
           gateway to diversified investment opportunities. At Accilent Finance
           Limited, we are committed to maximizing your wealth through strategic
           investments in four dynamic sectors: real estate, agriculture, crypto
@@ -32,7 +32,7 @@ const AboutUs = () => {
         </p>
 
         <p className="text-gray-600 text-base leading-relaxed">
-          Accilent Finance Limited was founded with a vision to empower
+          ChainRise-Patners was founded with a vision to empower
           investors by providing access to a wide array of lucrative markets.
           Our team comprises seasoned professionals with deep expertise in each
           of our focus areas. By combining industry knowledge with cutting-edge
