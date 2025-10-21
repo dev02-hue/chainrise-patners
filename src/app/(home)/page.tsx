@@ -11,6 +11,8 @@ import PricingSection from "../component/home/PricingSection";
 import { TestimonialSection } from "../component/home/TestimonialSection";
 import { WorkProcess } from "../component/home/WorkProcess";
 // import YouTubeVideo from "../component/home/YouTubeVideo";
+import { advantages } from '@/data/advantages'
+
 import TeamSection from "../component/plan/TeamSection";
  
  
@@ -19,8 +21,8 @@ export default function Home() {
      <div>
   <CryptoCurrencyTicker />
   <HeroSection /> 
-  <OurAdvantage />
-  {/* <YouTubeVideo /> */}
+  <OurAdvantage advantages={advantages} />
+   
   <LetsDoGreat />
   <AboutUs />
   <PricingSection />
