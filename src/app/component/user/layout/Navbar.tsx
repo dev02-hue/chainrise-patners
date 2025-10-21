@@ -130,8 +130,8 @@ export default function Navbar() {
             transition={{ duration: 0.3 }}
             className="text-2xl font-bold text-emerald-400 flex items-center"
           >
-            <span className="bg-emerald-500 text-white rounded-lg px-3 py-1 mr-2">A</span>
-            <span>ccilent</span>
+            <span className="bg-emerald-500 text-white rounded-lg px-3 py-1 mr-2">C</span>
+            <span>hainRise-Patners</span>
           </motion.div>
         </div>
 
@@ -233,8 +233,8 @@ export default function Navbar() {
             >
               <div className="p-4 border-b border-gray-700 flex items-center justify-between">
                 <div className="text-xl font-bold text-emerald-400 flex items-center">
-                  <span className="bg-emerald-500 text-white rounded-lg px-2 py-1 mr-2">A</span>
-                  <span>ccilent</span>
+                  <span className="bg-emerald-500 text-white rounded-lg px-2 py-1 mr-2">C</span>
+                  <span>hainRise-Patners</span>
                 </div>
                 <button 
                   onClick={toggleMobileMenu}
