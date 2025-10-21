@@ -122,31 +122,47 @@ export type UpdateInvestmentPlanInput = {
   referral_bonus?: number;
 };
 
-export type UpdateUserProfileInput = {
+export interface UpdateUserProfileInput {
   id: string;
+  name: string;
+  username: string;
+  email: string;
+  phoneNumber: string;
+  balance: number;
+}
+
+
+export interface Profile {
+  id: string;
+  name: string;
+  username: string;
+  email: string;
+  phoneNumber: string;
+  balance: number;
+  btcAddress?: string;
+  bnbAddress?: string;
+  dodgeAddress?: string;
+  ethAddress?: string;
+  solanaAddress?: string;
+  usdttrc20Address?: string;
+  referralCode?: string;
+  referredBy?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UpdateProfileInput {
   name?: string;
   username?: string;
   email?: string;
   phoneNumber?: string;
-  balance?: number;
-};
-
-
-export type Profile = {
-  id: string;
-  name: string;
-  username: string;
-  balance: number;
-  email: string;
-  phoneNumber: string;
-};
-
-export  type UpdateProfileInput = {
-  name?: string
-  username?: string
-  email?: string
-  phoneNumber?: string
-  currentPassword?: string // Needed for email changes
+  currentPassword?: string;
+  btcAddress?: string;
+  bnbAddress?: string;
+  dodgeAddress?: string;
+  ethAddress?: string;
+  solanaAddress?: string;
+  usdttrc20Address?: string;
 }
 
 // export type ProfileData = {

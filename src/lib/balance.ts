@@ -27,7 +27,7 @@ export async function getTotalDeposit(): Promise<number> {
       console.log('[getTotalDeposit] Fetching deposits for user:', userId);
   
       const { data: deposits, error } = await supabase
-        .from('deposits')
+        .from('chainrise_deposits')
         .select('amount')
         .eq('user_id', userId);
   
@@ -69,7 +69,7 @@ export async function getTotalDeposit(): Promise<number> {
       console.log('[getTotalInvestment] Fetching investments for user:', userId);
   
       const { data: investments, error } = await supabase
-        .from('user_investments')
+        .from('chainrise_investments')
         .select('amount, status')
         .eq('user_id', userId);
   
@@ -93,7 +93,7 @@ export async function getTotalDeposit(): Promise<number> {
 
 
   /**
- * Fetch the total amount of completed withdrawals for the logged-in user.
+ * Fetch the total amount of completed chainrise_withdrawals for the logged-in user.
  * @returns total completed withdrawal amount (0 if none or error)
  */
 export async function getTotalCompletedWithdrawal(): Promise<number> {
@@ -110,10 +110,10 @@ export async function getTotalCompletedWithdrawal(): Promise<number> {
       }
   
       const userId = session.user.id;
-      console.log('[getTotalCompletedWithdrawal] Fetching completed withdrawals for user:', userId);
+      console.log('[getTotalCompletedWithdrawal] Fetching completed chainrise_withdrawals for user:', userId);
   
       const { data, error } = await supabase
-        .from('withdrawals')
+        .from('chainrise_withdrawals')
         .select('amount')
         .eq('user_id', userId)
         .eq('status', 'completed');
@@ -150,7 +150,7 @@ export async function getTotalCompletedWithdrawal(): Promise<number> {
       console.log('[getTotalPendingWithdrawal] Fetching pending withdrawals for user:', userId);
   
       const { data, error } = await supabase
-        .from('withdrawals')
+        .from('chainrise_withdrawals')
         .select('amount')
         .eq('user_id', userId)
         .eq('status', 'pending');
@@ -185,7 +185,7 @@ export async function getTotalCompletedWithdrawal(): Promise<number> {
   
       // 2. Fetch profile data including balance
       const { data: profile, error } = await supabase
-        .from('accilent_profile')
+        .from('chainrise_profile')
         .select('name,referral_code, username, email, phone_number, balance')
         .eq('id', session.user.id)
         .single();

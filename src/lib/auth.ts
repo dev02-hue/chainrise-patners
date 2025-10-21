@@ -15,8 +15,15 @@ type SignUpInput = {
   phoneNumber: string
   password: string
   confirmPassword: string
-  referralCode?: string 
+  referralCode?: string
+  btcAddress?: string
+  bnbAddress?: string
+  dodgeAddress?: string
+  ethAddress?: string
+  solanaAddress?: string
+  usdttrc20Address?: string
 }
+
 const SIGNUP_BONUS_AMOUNT = 5;
 
 type SignInInput = {
@@ -50,7 +57,13 @@ export async function signUp({
   phoneNumber,
   password,
   confirmPassword,
-  referralCode, // Added referral code parameter
+  referralCode,
+  btcAddress,
+  bnbAddress,
+  dodgeAddress,
+  ethAddress,
+  solanaAddress,
+  usdttrc20Address,
 }: SignUpInput) {
   try {
     // 1. Validate input
@@ -63,7 +76,7 @@ export async function signUp({
 
     // 2. Check if username, email or phone already exists
     const { data: existingUser, error: lookupError } = await supabase
-      .from('accilent_profile')
+      .from('chainrise_profile')
       .select('username, email, phone_number, referral_code')
       .or(`username.eq.${username},email.eq.${email},phone_number.eq.${phoneNumber}`)
 
@@ -88,7 +101,7 @@ export async function signUp({
     let referredByUserId: string | null = null;
     if (referralCode) {
       const { data: referrerData, error: referrerError } = await supabase
-        .from('accilent_profile')
+        .from('chainrise_profile')
         .select('id')
         .eq('referral_code', referralCode)
         .single();
@@ -109,7 +122,7 @@ export async function signUp({
     while (!isCodeUnique && attempts < maxAttempts) {
       attempts++;
       const { data: existingCode } = await supabase
-        .from('accilent_profile')
+        .from('chainrise_profile')
         .select('referral_code')
         .eq('referral_code', referralCodeForNewUser)
         .single();
@@ -146,9 +159,9 @@ export async function signUp({
 
     const userId = authData.user.id
 
-    // 5. Create user profile with referral data
+    // 5. Create user profile with referral data and wallet addresses
     const now = new Date().toISOString()
-    const { error: profileError } = await supabase.from('accilent_profile').insert([{
+    const { error: profileError } = await supabase.from('chainrise_profile').insert([{
       id: userId,
       name,
       username,
@@ -156,6 +169,12 @@ export async function signUp({
       phone_number: phoneNumber,
       referral_code: referralCodeForNewUser,
       referred_by: referredByUserId,
+      btc_address: btcAddress || null,
+      bnb_address: bnbAddress || null,
+      dodge_address: dodgeAddress || null,
+      eth_address: ethAddress || null,
+      solana_address: solanaAddress || null,
+      usdttrc20_address: usdttrc20Address || null,
       created_at: now,
       updated_at: now,
     }])
@@ -166,10 +185,9 @@ export async function signUp({
     }
 
     // 6. Update referrer's stats if applicable
-    // 6. If this user was referred, process the referral bonus
     if (referredByUserId) {
-      // First update referrer's stats
-      await supabase.rpc('increment_referral_count', {
+      // Update referrer's stats
+      await supabase.rpc('increment_chainrise_referral_count', {
         user_id: referredByUserId
       }).then(({ error }) => {
         if (error) {
@@ -177,16 +195,15 @@ export async function signUp({
         }
       });
 
-      // Process signup bonus (if you want to award for signup, not deposit)
-      const SIGNUP_BONUS_AMOUNT = 5; // Example: $10 bonus for referred signup
+      // Process signup bonus
       const bonusResult = await processReferralBonus(userId, SIGNUP_BONUS_AMOUNT);
       
       if (bonusResult.error) {
         console.error('Referral bonus processing failed:', bonusResult.error);
-       }
+      }
     }
 
-    // 7. Send welcome email (with referral code)
+    // 7. Send welcome email (with referral code and wallet info)
     try {
       const transporter = nodemailer.createTransport({
         service: 'gmail',
@@ -196,19 +213,56 @@ export async function signUp({
         },
       })
 
+      const walletInfo = [
+        btcAddress && `BTC: ${btcAddress}`,
+        ethAddress && `ETH: ${ethAddress}`,
+        bnbAddress && `BNB: ${bnbAddress}`,
+        solanaAddress && `SOL: ${solanaAddress}`,
+        dodgeAddress && `DOGE: ${dodgeAddress}`,
+        usdttrc20Address && `USDT-TRC20: ${usdttrc20Address}`
+      ].filter(Boolean).join('<br>');
+
       const mailOptions = {
         from: process.env.EMAIL_FROM,
         to: email,
-        subject: 'Welcome to Accilent - Confirm Your Email',
+        subject: 'Welcome to ChainRise-Partners - Confirm Your Email',
         html: `
-          <p>Hello ${name},</p>
-          <p>Thank you for registering with Accilent!</p>
-          <p>Your username: <strong>${username}</strong></p>
-          <p>Your unique referral code: <strong>${referralCodeForNewUser}</strong></p>
-          <p>Share this code with friends to earn rewards!</p>
-          <p>Please click the link below to verify your email address:</p>
-          <p><a href="${process.env.NEXT_PUBLIC_SITE_URL}/auth/confirm-email?token=${authData.session?.access_token}">Verify Email</a></p>
-          <p>If you didn't create this account, please contact support immediately.</p>
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #059669;">Welcome to ChainRise-Partners!</h2>
+            <p>Hello <strong>${name}</strong>,</p>
+            <p>Thank you for registering with ChainRise-Partners!</p>
+            
+            <div style="background: #f8fafc; padding: 15px; border-radius: 8px; margin: 20px 0;">
+              <h3 style="color: #059669; margin-top: 0;">Your Account Details:</h3>
+              <p><strong>Username:</strong> ${username}</p>
+              <p><strong>Referral Code:</strong> <code style="background: #e2e8f0; padding: 2px 6px; border-radius: 4px;">${referralCodeForNewUser}</code></p>
+              <p>Share your referral code with friends to earn rewards!</p>
+            </div>
+
+            ${walletInfo ? `
+            <div style="background: #f0fdf4; padding: 15px; border-radius: 8px; margin: 20px 0;">
+              <h3 style="color: #059669; margin-top: 0;">Your Wallet Addresses:</h3>
+              <p>${walletInfo}</p>
+            </div>
+            ` : ''}
+
+            <p>Please click the link below to verify your email address:</p>
+            <p style="text-align: center; margin: 25px 0;">
+              <a href="${process.env.NEXT_PUBLIC_SITE_URL}/auth/confirm-email?token=${authData.session?.access_token}" 
+                 style="background: #059669; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
+                Verify Email Address
+              </a>
+            </p>
+            
+            <p style="color: #64748b; font-size: 14px;">
+              If you didn't create this account, please contact our support team immediately.
+            </p>
+            
+            <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 25px 0;">
+            <p style="color: #64748b; font-size: 12px;">
+              ChainRise-Partners - Secure Crypto Investment Platform
+            </p>
+          </div>
         `,
       }
 
@@ -246,7 +300,7 @@ export async function signIn({ emailOrUsername, password }: SignInInput) {
     if (!isEmail) {
       // Lookup email by username
       const { data: profile, error: profileError } = await supabase
-        .from('accilent_profile')
+        .from('chainrise_profile')
         .select('email')
         .eq('username', emailOrUsername)
         .single()
@@ -279,7 +333,7 @@ export async function signIn({ emailOrUsername, password }: SignInInput) {
     }
 
     // 5. Set cookies
-    const cookieStore =await cookies()
+    const cookieStore = await cookies()
     const oneYear = 31536000 // 1 year in seconds
 
     cookieStore.set('sb-access-token', sessionToken, {
@@ -308,7 +362,7 @@ export async function signIn({ emailOrUsername, password }: SignInInput) {
 
     // Get username to store in cookie
     const { data: userProfile } = await supabase
-      .from('accilent_profile')
+      .from('chainrise_profile')
       .select('username')
       .eq('id', userId)
       .single()
@@ -343,7 +397,7 @@ export async function resetPassword({ email }: ResetPasswordInput) {
 
     // 2. Find user by email
     const { data: user, error: userError } = await supabase
-      .from('accilent_profile')
+      .from('chainrise_profile')
       .select('id, name')
       .eq('email', email)
       .single()
@@ -358,7 +412,7 @@ export async function resetPassword({ email }: ResetPasswordInput) {
 
     // 4. Store token in database
     const { error: tokenError } = await supabase
-      .from('password_reset_tokens')
+      .from('chainrise_password_reset_tokens')
       .insert({
         user_id: user.id,
         token,
@@ -385,14 +439,28 @@ export async function resetPassword({ email }: ResetPasswordInput) {
       const mailOptions = {
         from: process.env.EMAIL_FROM,
         to: email,
-        subject: 'Accilent - Password Reset Request',
+        subject: 'ChainRise-Partners - Password Reset Request',
         html: `
-          <p>Hello ${user.name},</p>
-          <p>We received a request to reset your Accilent account password.</p>
-          <p>Click the link below to reset your password:</p>
-          <p><a href="${resetLink}">Reset Password</a></p>
-          <p>This link will expire in 1 hour.</p>
-          <p>If you didn't request this, please ignore this email.</p>
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #059669;">Password Reset Request</h2>
+            <p>Hello <strong>${user.name}</strong>,</p>
+            <p>We received a request to reset your ChainRise-Partners account password.</p>
+            
+            <p style="text-align: center; margin: 25px 0;">
+              <a href="${resetLink}" 
+                 style="background: #059669; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
+                Reset Your Password
+              </a>
+            </p>
+            
+            <p style="color: #64748b;">This link will expire in 1 hour.</p>
+            <p>If you didn't request this, please ignore this email and ensure your account is secure.</p>
+            
+            <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 25px 0;">
+            <p style="color: #64748b; font-size: 12px;">
+              ChainRise-Partners Security Team
+            </p>
+          </div>
         `,
       }
 
@@ -431,7 +499,7 @@ export async function confirmResetPassword({
 
     // 2. Verify token
     const { data: tokenRecord, error: tokenError } = await supabase
-      .from('password_reset_tokens')
+      .from('chainrise_password_reset_tokens')
       .select('*')
       .eq('token', token)
       .gt('expires_at', new Date().toISOString())
@@ -460,7 +528,7 @@ export async function confirmResetPassword({
 
     // 4. Mark token as used
     await supabase
-      .from('password_reset_tokens')
+      .from('chainrise_password_reset_tokens')
       .update({ used: true })
       .eq('id', tokenRecord.id)
 
@@ -485,7 +553,7 @@ export async function signOut() {
     }
 
     // 2. Clear all auth-related cookies
-    const cookieStore =await cookies()
+    const cookieStore = await cookies()
     
     cookieStore.delete('sb-access-token')
     cookieStore.delete('sb-refresh-token')
@@ -502,16 +570,16 @@ export async function signOut() {
 
 export async function getSession() {
   try {
-    const cookieStore =await cookies()
+    const cookieStore = await cookies()
     const accessToken = cookieStore.get('sb-access-token')?.value
     const refreshToken = cookieStore.get('sb-refresh-token')?.value
 
     if (!accessToken || !refreshToken) {
       if (typeof window !== 'undefined') {
-                window.location.href = '/signin';
-              } else {
-                redirect('/signin'); // for use in server-side functions (Next.js App Router only)
-              }
+        window.location.href = '/signin';
+      } else {
+        redirect('/signin');
+      }
       return { session: null, user: null }
     }
 
