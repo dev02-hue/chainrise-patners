@@ -179,10 +179,55 @@ export interface UpdateProfileInput {
   usdttrc20Address?: string;
 }
 
-// export type ProfileData = {
-//   name: string
-//   username: string
-//   email: string
-//   phoneNumber: string
-// }
+ // Add these to your existing types in deposit.ts
 
+export interface DepositAnalytics {
+  overview: DepositOverview;
+  timeline: DepositTimelineData[];
+  walletAnalytics: WalletAnalytics[];
+  statusDistribution: StatusDistribution;
+  performanceMetrics: PerformanceMetrics;
+  recentActivity: Deposit[];
+}
+
+export interface DepositOverview {
+  totalDeposits: number;
+  totalAmount: number;
+  pendingDeposits: number;
+  completedDeposits: number;
+  averageDeposit: number;
+  growthRate: number;
+}
+
+export interface DepositTimelineData {
+  date: string;
+  deposits: number;
+  amount: number;
+  completed: number;
+  pending: number;
+}
+
+export interface WalletAnalytics {
+  cryptoType: string;
+  totalDeposits: number;
+  totalAmount: number;
+  averageAmount: number;
+  successRate: number;
+  pendingCount: number;
+}
+
+export interface StatusDistribution {
+  pending: number;
+  confirmed: number;
+  completed: number;
+  failed: number;
+  cancelled: number;
+}
+
+export interface PerformanceMetrics {
+  approvalRate: number;
+  averageProcessingTime: number; // in hours
+  completionRate: number;
+  totalUsers: number;
+  activeUsers: number;
+}

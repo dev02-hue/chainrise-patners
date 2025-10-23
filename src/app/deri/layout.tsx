@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ReactNode, useState } from "react";
 import { AiFillTrademarkCircle } from "react-icons/ai";
 import { FiUsers, FiUpload, FiDownload, FiMenu, FiX } from "react-icons/fi";
+import { MdAnalytics } from "react-icons/md";
  
 export default function AdminLayout({ children }: { children: ReactNode }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -41,13 +42,13 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           >
             <FiUpload /> All Deposits
           </Link>
-          {/* <Link 
-            href="/deri/wallet" 
+          <Link 
+            href="/deri/deposit-analytics" 
             className="flex items-center hover:bg-gray-700 px-4 py-2 rounded gap-2"
             onClick={() => setIsSidebarOpen(false)}
           >
-            <MdAccountBalanceWallet /> All wallet phrases
-          </Link> */}
+            <MdAnalytics /> deposit-analytics
+          </Link>
           <Link 
             href="/deri/withdrawal" 
             className="flex items-center hover:bg-gray-700 px-4 py-2 rounded gap-2"
