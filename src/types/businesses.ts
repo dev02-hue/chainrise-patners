@@ -39,6 +39,16 @@ export interface DepositInput {
   transactionHash?: string;
 }
 
+export interface User {
+  id: string;
+  username: string;
+  email: string;
+  is_banned?: boolean;  // ✅ optional (matches what Supabase returns)
+  banned_at?: string | null;
+}
+
+
+
  export interface InvestmentPlan {
   id: string; // Changed from number to string to match UUID
   title: string;
@@ -230,4 +240,48 @@ export interface PerformanceMetrics {
   completionRate: number;
   totalUsers: number;
   activeUsers: number;
+}
+
+
+export type EmailInput = {
+  recipientEmail: string
+  subject: string
+  message: string
+}
+
+export type AdminEmailResponse = {
+  success?: boolean
+  error?: string
+  message?: string
+}
+
+
+// Add these to your existing types
+
+export type BanUserInput = {
+  userId: string;
+  reason?: string;
+  duration?: number; // in hours, undefined = permanent
+}
+
+export type DeleteUserInput = {
+  userId: string;
+  confirm?: boolean;
+}
+
+export type UserManagementResponse = {
+  success: boolean;
+  message: string;
+  userId?: string;
+  action?: 'banned' | 'unbanned' | 'deleted';
+}
+
+export type BanRecord = {
+  id: string;
+  user_id: string;
+  banned_by: string;
+  reason: string | null;
+  banned_at: string;
+  expires_at: string | null;
+  is_active: boolean;
 }

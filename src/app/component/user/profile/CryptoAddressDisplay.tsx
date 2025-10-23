@@ -298,7 +298,7 @@ export default function CryptoAddressDisplay() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="bg-gradient-to-r from-emerald-500 to-green-600 rounded-2xl p-6 text-white shadow-lg"
+          className="bg-gradient-to-r from-blu2-400 to-blue-600 rounded-2xl p-6 text-white shadow-lg"
         >
           <div className="flex items-start">
             <FiShield className="mr-4 text-xl mt-1 flex-shrink-0" />

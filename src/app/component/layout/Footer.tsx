@@ -6,7 +6,7 @@ import {
   FaLinkedinIn,
   FaTwitter,
   FaFacebookF,
-  FaPhoneAlt,
+  // FaPhoneAlt,
   FaEnvelope,
   FaMapMarkerAlt,
   FaChevronRight,
@@ -236,17 +236,17 @@ const Footer = () => {
               <div className="w-8 h-0.5 bg-teal-400"></div>
             </h4>
             <ul className="space-y-4 text-gray-300">
-              <li className="flex items-start gap-3 group hover:text-teal-400 transition-colors">
+              {/* <li className="flex items-start gap-3 group hover:text-teal-400 transition-colors">
                 <FaPhoneAlt className="text-teal-400 mt-1 flex-shrink-0 group-hover:scale-110 transition-transform" />
                 <div>
                   <div className="font-medium">+447552536736</div>
                   <div className="text-sm text-gray-400">Mon-Fri 9AM-6PM</div>
                 </div>
-              </li>
+              </li> */}
               <li className="flex items-start gap-3 group hover:text-teal-400 transition-colors">
                 <FaEnvelope className="text-teal-400 mt-1 flex-shrink-0 group-hover:scale-110 transition-transform" />
                 <div>
-                  <div className="font-medium">support@ChainRisePatners.com</div>
+                  <div className="font-medium">chainrisepatners@gmail.com</div>
                   <div className="text-sm text-gray-400">Quick response</div>
                 </div>
               </li>

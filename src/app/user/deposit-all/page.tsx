@@ -9,9 +9,7 @@ import {
   FaBitcoin, 
   FaDog, 
   FaEthereum, 
- 
   FaWallet, 
- 
   FaFilter,
   FaSearch,
   FaSort,
@@ -38,7 +36,7 @@ const DepositHistoryPage = () => {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
   // Animation variants
-  const containerVariants = {
+  const containerVariants: Variants = {
     hidden: { opacity: 0 },
     visible: {
       opacity: 1,
@@ -48,15 +46,14 @@ const DepositHistoryPage = () => {
     }
   };
 
- 
-
   const cardVariants: Variants = {
-    hidden: { scale: 0.9, opacity: 0 },
+    hidden: { scale: 0.9, opacity: 0, y: 20 },
     visible: {
       scale: 1,
       opacity: 1,
+      y: 0,
       transition: {
-        type: "spring" as any,
+        type: "spring",
         stiffness: 300,
         damping: 25
       }
@@ -64,8 +61,18 @@ const DepositHistoryPage = () => {
     exit: {
       scale: 0.9,
       opacity: 0,
+      y: -20,
       transition: {
         duration: 0.2
+      }
+    },
+    hover: {
+      y: -4,
+      scale: 1.01,
+      transition: {
+        type: "spring",
+        stiffness: 400,
+        damping: 25
       }
     }
   };
@@ -129,11 +136,11 @@ const DepositHistoryPage = () => {
     const iconClass = "text-2xl";
     switch (symbol.toUpperCase()) {
       case 'BTC': return <FaBitcoin className={`${iconClass} text-orange-500`} />;
-      case 'ETH': return <FaEthereum className={`${iconClass} text-gray-400`} />;
+      case 'ETH': return <FaEthereum className={`${iconClass} text-gray-600`} />;
       case 'BNB': return <SiBinance className={`${iconClass} text-yellow-500`} />;
       case 'DOGE': return <FaDog className={`${iconClass} text-orange-400`} />;
       case 'SOL': return <SiSolana className={`${iconClass} text-purple-500`} />;
-      case 'USDT': return <SiTether className={`${iconClass} text-green-500`} />;
+      case 'USDT': return <SiTether className={`${iconClass} text-emerald-500`} />;
       case 'XRP': return <SiRipple className={`${iconClass} text-blue-500`} />;
       case 'LTC': return <SiLitecoin className={`${iconClass} text-blue-400`} />;
       default: return <FaWallet className={`${iconClass} text-gray-500`} />;
@@ -150,7 +157,7 @@ const DepositHistoryPage = () => {
         return <FaClock className="text-amber-500" />;
       case 'cancelled':
       case 'failed':
-        return <FaTimesCircle className="text-red-500" />;
+        return <FaTimesCircle className="text-rose-500" />;
       default:
         return <FaClock className="text-gray-500" />;
     }
@@ -165,9 +172,9 @@ const DepositHistoryPage = () => {
       case 'pending':
         return 'bg-amber-100 text-amber-800 border-amber-200';
       case 'cancelled':
-        return 'bg-red-100 text-red-800 border-red-200';
+        return 'bg-rose-100 text-rose-800 border-rose-200';
       case 'failed':
-        return 'bg-red-100 text-red-800 border-red-200';
+        return 'bg-rose-100 text-rose-800 border-rose-200';
       default:
         return 'bg-gray-100 text-gray-800 border-gray-200';
     }
@@ -193,7 +200,7 @@ const DepositHistoryPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-blue-900 py-8 px-4">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-blue-100 py-8 px-4">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <motion.div
@@ -201,10 +208,10 @@ const DepositHistoryPage = () => {
           animate={{ opacity: 1, y: 0 }}
           className="text-center mb-12"
         >
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-4">
+          <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-blue-800 bg-clip-text text-transparent mb-4">
             Deposit History
           </h1>
-          <p className="text-lg text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
+          <p className="text-lg text-gray-600 max-w-2xl mx-auto font-medium">
             Track and manage all your investment deposits in one place
           </p>
         </motion.div>
@@ -216,29 +223,29 @@ const DepositHistoryPage = () => {
           transition={{ delay: 0.1 }}
           className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8"
         >
-          <div className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-2xl p-6 border border-gray-200 dark:border-slate-700 shadow-lg">
-            <div className="text-2xl font-bold text-gray-800 dark:text-white mb-1">
+          <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm">
+            <div className="text-2xl font-bold text-gray-800 mb-1">
               {deposits.length}
             </div>
-            <div className="text-sm text-gray-600 dark:text-gray-400">Total Deposits</div>
+            <div className="text-sm text-gray-600 font-medium">Total Deposits</div>
           </div>
-          <div className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-2xl p-6 border border-gray-200 dark:border-slate-700 shadow-lg">
+          <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm">
             <div className="text-2xl font-bold text-emerald-500 mb-1">
               {deposits.filter(d => d.status === 'completed').length}
             </div>
-            <div className="text-sm text-gray-600 dark:text-gray-400">Completed</div>
+            <div className="text-sm text-gray-600 font-medium">Completed</div>
           </div>
-          <div className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-2xl p-6 border border-gray-200 dark:border-slate-700 shadow-lg">
+          <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm">
             <div className="text-2xl font-bold text-amber-500 mb-1">
               {deposits.filter(d => d.status === 'pending').length}
             </div>
-            <div className="text-sm text-gray-600 dark:text-gray-400">Pending</div>
+            <div className="text-sm text-gray-600 font-medium">Pending</div>
           </div>
-          <div className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-2xl p-6 border border-gray-200 dark:border-slate-700 shadow-lg">
+          <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm">
             <div className="text-2xl font-bold text-blue-500 mb-1">
               ${deposits.reduce((sum, deposit) => sum + deposit.amount, 0).toFixed(2)}
             </div>
-            <div className="text-sm text-gray-600 dark:text-gray-400">Total Invested</div>
+            <div className="text-sm text-gray-600 font-medium">Total Invested</div>
           </div>
         </motion.div>
 
@@ -247,7 +254,7 @@ const DepositHistoryPage = () => {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm rounded-2xl p-6 mb-8 border border-gray-200 dark:border-slate-700 shadow-lg"
+          className="bg-white rounded-2xl p-6 mb-8 border border-gray-200 shadow-sm"
         >
           <div className="flex flex-col lg:flex-row gap-4 items-center justify-between">
             {/* Search */}
@@ -258,7 +265,7 @@ const DepositHistoryPage = () => {
                 placeholder="Search by crypto, amount, or status..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-300"
+                className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-300 font-medium"
               />
             </div>
 
@@ -268,7 +275,7 @@ const DepositHistoryPage = () => {
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="px-4 py-3 bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-300"
+                className="px-4 py-3 bg-gray-50 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-300 font-medium"
               >
                 <option value="all">All Status</option>
                 <option value="pending">Pending</option>
@@ -284,10 +291,10 @@ const DepositHistoryPage = () => {
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={() => toggleSort('date')}
-                className={`px-4 py-3 rounded-xl border transition-all duration-300 flex items-center space-x-2 ${
+                className={`px-4 py-3 rounded-xl border transition-all duration-300 flex items-center space-x-2 font-medium ${
                   sortBy === 'date'
                     ? 'bg-blue-500 text-white border-blue-500'
-                    : 'bg-gray-50 dark:bg-slate-700 border-gray-200 dark:border-slate-600 text-gray-700 dark:text-gray-300'
+                    : 'bg-gray-50 border-gray-300 text-gray-700 hover:bg-gray-100'
                 }`}
               >
                 <FaCalendarAlt />
@@ -299,10 +306,10 @@ const DepositHistoryPage = () => {
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={() => toggleSort('amount')}
-                className={`px-4 py-3 rounded-xl border transition-all duration-300 flex items-center space-x-2 ${
+                className={`px-4 py-3 rounded-xl border transition-all duration-300 flex items-center space-x-2 font-medium ${
                   sortBy === 'amount'
                     ? 'bg-blue-500 text-white border-blue-500'
-                    : 'bg-gray-50 dark:bg-slate-700 border-gray-200 dark:border-slate-600 text-gray-700 dark:text-gray-300'
+                    : 'bg-gray-50 border-gray-300 text-gray-700 hover:bg-gray-100'
                 }`}
               >
                 <span>Amount</span>
@@ -335,25 +342,25 @@ const DepositHistoryPage = () => {
             <motion.div
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl p-8 text-center"
+              className="bg-rose-50 border border-rose-200 rounded-2xl p-8 text-center"
             >
-              <div className="text-red-500 text-4xl mb-4">⚠️</div>
-              <h3 className="text-lg font-semibold text-red-700 dark:text-red-300 mb-2">
+              <div className="text-rose-500 text-4xl mb-4">⚠️</div>
+              <h3 className="text-lg font-semibold text-rose-700 mb-2">
                 Unable to Load Deposits
               </h3>
-              <p className="text-red-600 dark:text-red-400">{error.deposits}</p>
+              <p className="text-rose-600 font-medium">{error.deposits}</p>
             </motion.div>
           ) : filteredDeposits.length === 0 ? (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="text-center py-16 bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm rounded-2xl border border-gray-200 dark:border-slate-700"
+              className="text-center py-16 bg-white rounded-2xl border border-gray-200"
             >
               <div className="text-6xl mb-4">📊</div>
-              <h3 className="text-xl font-semibold text-gray-600 dark:text-gray-400 mb-2">
+              <h3 className="text-xl font-semibold text-gray-600 mb-2">
                 {searchTerm || statusFilter !== 'all' ? 'No matching transactions' : 'No transactions yet'}
               </h3>
-              <p className="text-gray-500 dark:text-gray-500 max-w-md mx-auto">
+              <p className="text-gray-500 max-w-md mx-auto font-medium">
                 {searchTerm || statusFilter !== 'all' 
                   ? 'Try adjusting your search or filter criteria'
                   : 'Start your investment journey by making your first deposit'
@@ -362,27 +369,28 @@ const DepositHistoryPage = () => {
             </motion.div>
           ) : (
             <AnimatePresence>
-              {filteredDeposits.map((deposit ) => (
+              {filteredDeposits.map((deposit) => (
                 <motion.div
                   key={deposit.id}
                   variants={cardVariants}
                   initial="hidden"
                   animate="visible"
                   exit="exit"
+                  whileHover="hover"
                   layout
-                  className="bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm rounded-2xl p-6 border border-gray-200 dark:border-slate-700 shadow-lg hover:shadow-xl transition-all duration-300"
+                  className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm hover:shadow-lg transition-all duration-300"
                 >
                   <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                     {/* Left Section - Crypto and Amount */}
                     <div className="flex items-center space-x-4">
-                      <div className="p-3 bg-gradient-to-br from-blue-100 to-purple-100 dark:from-blue-900/20 dark:to-purple-900/20 rounded-xl">
+                      <div className="p-3 bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl">
                         {getCryptoIcon(deposit.cryptoType)}
                       </div>
                       <div>
-                        <h3 className="text-lg font-semibold text-gray-800 dark:text-white">
+                        <h3 className="text-lg font-semibold text-gray-800">
                           ${deposit.amount.toFixed(2)}
                         </h3>
-                        <p className="text-sm text-gray-600 dark:text-gray-400 capitalize">
+                        <p className="text-sm text-gray-600 font-medium capitalize">
                           {deposit.cryptoType} • {deposit.planTitle || 'Investment Plan'}
                         </p>
                       </div>
@@ -397,14 +405,14 @@ const DepositHistoryPage = () => {
                         <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${getStatusColor(deposit.status)}`}>
                           {deposit.status.charAt(0).toUpperCase() + deposit.status.slice(1)}
                         </span>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        <p className="text-xs text-gray-500 mt-1 font-medium">
                           {formatDate(deposit.createdAt)}
                         </p>
                       </div>
                     </div>
 
                     {/* Right Section - Date (Mobile) */}
-                    <div className="lg:hidden flex items-center space-x-2 text-sm text-gray-500 dark:text-gray-400">
+                    <div className="lg:hidden flex items-center space-x-2 text-sm text-gray-500">
                       <FaCalendarAlt />
                       <span>{new Date(deposit.createdAt).toLocaleDateString()}</span>
                     </div>
@@ -420,7 +428,7 @@ const DepositHistoryPage = () => {
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="text-center mt-8 text-gray-500 dark:text-gray-400"
+            className="text-center mt-8 text-gray-500 font-medium"
           >
             Showing {filteredDeposits.length} of {deposits.length} transactions
           </motion.div>

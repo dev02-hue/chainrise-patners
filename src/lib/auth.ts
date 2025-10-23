@@ -7,6 +7,7 @@ import { v4 as uuidv4 } from 'uuid'
 import nodemailer from 'nodemailer'
 import { processReferralBonus } from './referral'
 import { redirect } from 'next/navigation'
+import { AdminEmailResponse, EmailInput } from '@/types/businesses'
 
 type SignUpInput = {
   name: string
@@ -596,5 +597,146 @@ export async function getSession() {
   } catch (err) {
     console.error('Error getting session:', err)
     return { session: null, user: null }
+  }
+}
+
+
+export async function sendAdminEmail({
+  recipientEmail,
+  subject,
+  message,
+}: EmailInput): Promise<AdminEmailResponse> {
+  console.log('🔍 sendAdminEmail function called with:', { recipientEmail, subject, message });
+  
+  try {
+    // 1. Verify admin privileges using the session
+    console.log('🔍 Step 1: Checking session...');
+    const { session } = await getSession()
+    console.log('🔍 Session data:', session);
+    
+    if (!session?.user) {
+      console.log('❌ No session or user found');
+      return { error: 'Authentication required' }
+    }
+    console.log('✅ Session verified, user ID:', session.user.id);
+
+    // 2. Check if user is admin
+    console.log('🔍 Step 2: Checking admin privileges...');
+    const { data: profile, error: profileError } = await supabase
+      .from('chainrise_profile')
+      .select('is_admin')
+      .eq('id', session.user.id)
+      .single()
+
+    console.log('🔍 Profile query result:', { profile, profileError });
+    
+    if (profileError) {
+      console.log('❌ Profile query error:', profileError);
+      return { error: 'Admin privileges required' }
+    }
+    
+    if (!profile?.is_admin) {
+      console.log('❌ User is not admin. is_admin value:', profile?.is_admin);
+      return { error: 'Admin privileges required' }
+    }
+    console.log('✅ Admin privileges verified');
+
+    // 3. Validate recipient email exists in system
+    console.log('🔍 Step 3: Validating recipient email...');
+    const { data: recipientProfile, error: recipientError } = await supabase
+      .from('chainrise_profile')
+      .select('id, name')
+      .eq('email', recipientEmail)
+      .single()
+
+    console.log('🔍 Recipient query result:', { recipientProfile, recipientError });
+    
+    if (recipientError) {
+      console.log('❌ Recipient query error:', recipientError);
+      return { error: 'Recipient email not found in system' }
+    }
+    
+    if (!recipientProfile) {
+      console.log('❌ No recipient profile found for email:', recipientEmail);
+      return { error: 'Recipient email not found in system' }
+    }
+    console.log('✅ Recipient verified:', recipientProfile.name);
+
+    // 4. Send email using nodemailer
+    console.log('🔍 Step 4: Setting up email transporter...');
+    console.log('🔍 Email username exists:', !!process.env.EMAIL_USERNAME);
+    console.log('🔍 Email password exists:', !!process.env.EMAIL_PASSWORD);
+    console.log('🔍 Email from exists:', !!process.env.EMAIL_FROM);
+    
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: process.env.EMAIL_USERNAME,
+        pass: process.env.EMAIL_PASSWORD,
+      },
+    })
+
+    console.log('🔍 Creating mail options...');
+    const mailOptions = {
+      from: process.env.EMAIL_FROM,
+      to: recipientEmail,
+      subject: subject,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #059669;">ChainRise-Partners Admin Message</h2>
+          <p>Hello <strong>${recipientProfile.name || 'Valued User'}</strong>,</p>
+          
+          <div style="background: #f8fafc; padding: 15px; border-radius: 8px; margin: 20px 0;">
+            <h3 style="color: #059669; margin-top: 0;">Message from Admin:</h3>
+            <p style="white-space: pre-wrap;">${message}</p>
+          </div>
+
+          <p>If you have any questions, please contact our support team.</p>
+          
+          <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 25px 0;">
+          <p style="color: #64748b; font-size: 12px;">
+            ChainRise-Partners Admin Team
+          </p>
+        </div>
+      `,
+    }
+
+    console.log('🔍 Attempting to send email...');
+    const emailResult = await transporter.sendMail(mailOptions)
+    console.log('✅ Email sent successfully:', emailResult);
+
+    // 5. Log the email sent for audit purposes
+    console.log('🔍 Step 5: Logging email to database...');
+    const { error: logError } = await supabase
+      .from('chainrise_email_logs')
+      .insert({
+        admin_id: session.user.id,
+        recipient_email: recipientEmail,
+        recipient_id: recipientProfile.id,
+        subject: subject,
+        message: message,
+        sent_at: new Date().toISOString(),
+      })
+
+    if (logError) {
+      console.error('❌ Failed to log email:', logError);
+      console.log('⚠️  Email was sent but logging failed');
+    } else {
+      console.log('✅ Email logged successfully');
+    }
+
+    console.log('🎉 Email process completed successfully');
+    return {
+      success: true,
+      message: 'Email sent successfully to ' + recipientEmail,
+    }
+  } catch (err) {
+    console.error('💥 Unexpected error in sendAdminEmail:', err);
+    const errorDetails = err instanceof Error
+      ? { name: err.name, message: err.message, stack: err.stack }
+      : { message: typeof err === 'string' ? err : JSON.stringify(err) };
+
+    console.error('💥 Error details:', errorDetails);
+    return { error: 'Failed to send email. Please try again.' }
   }
 }
