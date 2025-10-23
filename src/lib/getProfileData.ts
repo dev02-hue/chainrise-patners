@@ -883,3 +883,250 @@ export async function getUserDashboardStats(): Promise<{
     return { error: 'An unexpected error occurred' };
   }
 }
+
+
+
+
+
+
+
+
+
+// Add these functions to your existing profile.ts file
+
+/**
+ * Get total user count
+ */
+export async function getTotalUsers(): Promise<{ data?: number; error?: string }> {
+  try {
+    const { count, error } = await supabase
+      .from('chainrise_profile')
+      .select('*', { count: 'exact', head: true });
+
+    if (error) {
+      console.error('Error fetching total users:', error);
+      return { error: 'Failed to fetch user count' };
+    }
+
+    return { data: count || 0 };
+  } catch (err) {
+    console.error('Unexpected error in getTotalUsers:', err);
+    return { error: 'An unexpected error occurred' };
+  }
+}
+
+/**
+ * Get platform-wide statistics
+ */
+export async function getPlatformStats(): Promise<{ 
+  data?: {
+    totalBalance: number;
+    totalEarnings: number;
+    totalInvested: number;
+    activeUsers: number;
+    totalUsers: number;
+  }; 
+  error?: string 
+}> {
+  try {
+    // Get total users
+    const { data: totalUsers, error: usersError } = await getTotalUsers();
+    if (usersError) {
+      return { error: usersError };
+    }
+
+    // Get platform-wide sums
+    const { data: stats, error: statsError } = await supabase
+      .from('chainrise_profile')
+      .select('balance, total_earnings, total_invested, is_active')
+      .not('balance', 'is', null);
+
+    if (statsError) {
+      console.error('Error fetching platform stats:', statsError);
+      return { error: 'Failed to fetch platform statistics' };
+    }
+
+    if (!stats) {
+      return { 
+        data: {
+          totalBalance: 0,
+          totalEarnings: 0,
+          totalInvested: 0,
+          activeUsers: 0,
+          totalUsers: totalUsers || 0
+        }
+      };
+    }
+
+    const totals = stats.reduce((acc, profile) => ({
+      totalBalance: acc.totalBalance + (profile.balance || 0),
+      totalEarnings: acc.totalEarnings + (profile.total_earnings || 0),
+      totalInvested: acc.totalInvested + (profile.total_invested || 0),
+      activeUsers: acc.activeUsers + (profile.is_active ? 1 : 0)
+    }), {
+      totalBalance: 0,
+      totalEarnings: 0,
+      totalInvested: 0,
+      activeUsers: 0
+    });
+
+    return {
+      data: {
+        ...totals,
+        totalUsers: totalUsers || 0
+      }
+    };
+  } catch (err) {
+    console.error('Unexpected error in getPlatformStats:', err);
+    return { error: 'An unexpected error occurred' };
+  }
+}
+
+/**
+ * Get earnings analytics for time periods
+ */
+export async function getEarningsAnalytics(): Promise<{ 
+  data?: {
+    weekly: { date: string; earnings: number }[];
+    monthly: { month: string; earnings: number }[];
+    yearly: { year: string; earnings: number }[];
+  }; 
+  error?: string 
+}> {
+  try {
+    // For weekly earnings (last 8 weeks)
+    const weeklyEarnings = await calculateWeeklyEarnings();
+    
+    // For monthly earnings (last 12 months)
+    const monthlyEarnings = await calculateMonthlyEarnings();
+    
+    // For yearly earnings (all years)
+    const yearlyEarnings = await calculateYearlyEarnings();
+
+    return {
+      data: {
+        weekly: weeklyEarnings,
+        monthly: monthlyEarnings,
+        yearly: yearlyEarnings
+      }
+    };
+  } catch (err) {
+    console.error('Unexpected error in getEarningsAnalytics:', err);
+    return { error: 'An unexpected error occurred' };
+  }
+}
+
+/**
+ * Calculate weekly earnings (last 8 weeks)
+ */
+async function calculateWeeklyEarnings(): Promise<{ date: string; earnings: number }[]> {
+  try {
+    const { data: transactions, error } = await supabase
+      .from('chainrise_transactions')
+      .select('created_at, amount, type')
+      .eq('type', 'profit')
+      .gte('created_at', new Date(Date.now() - 8 * 7 * 24 * 60 * 60 * 1000).toISOString())
+      .order('created_at', { ascending: true });
+
+    if (error || !transactions) {
+      console.error('Error fetching weekly earnings:', error);
+      return [];
+    }
+
+    // Group by week
+    const weeklyData: { [key: string]: number } = {};
+    
+    transactions.forEach(transaction => {
+      const date = new Date(transaction.created_at);
+      const weekStart = new Date(date);
+      weekStart.setDate(date.getDate() - date.getDay()); // Start of week (Sunday)
+      const weekKey = weekStart.toISOString().split('T')[0];
+      
+      weeklyData[weekKey] = (weeklyData[weekKey] || 0) + transaction.amount;
+    });
+
+    // Format for chart
+    return Object.entries(weeklyData).map(([date, earnings]) => ({
+      date: new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      earnings
+    })).slice(-8); // Last 8 weeks
+  } catch (err) {
+    console.error('Error in calculateWeeklyEarnings:', err);
+    return [];
+  }
+}
+
+/**
+ * Calculate monthly earnings (last 12 months)
+ */
+async function calculateMonthlyEarnings(): Promise<{ month: string; earnings: number }[]> {
+  try {
+    const { data: transactions, error } = await supabase
+      .from('chainrise_transactions')
+      .select('created_at, amount, type')
+      .eq('type', 'profit')
+      .gte('created_at', new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString())
+      .order('created_at', { ascending: true });
+
+    if (error || !transactions) {
+      console.error('Error fetching monthly earnings:', error);
+      return [];
+    }
+
+    // Group by month
+    const monthlyData: { [key: string]: number } = {};
+    
+    transactions.forEach(transaction => {
+      const date = new Date(transaction.created_at);
+      const monthKey = date.toISOString().substring(0, 7); // YYYY-MM format
+      
+      monthlyData[monthKey] = (monthlyData[monthKey] || 0) + transaction.amount;
+    });
+
+    // Format for chart
+    return Object.entries(monthlyData).map(([month, earnings]) => ({
+      month: new Date(month + '-01').toLocaleDateString('en-US', { year: 'numeric', month: 'short' }),
+      earnings
+    })).slice(-12); // Last 12 months
+  } catch (err) {
+    console.error('Error in calculateMonthlyEarnings:', err);
+    return [];
+  }
+}
+
+/**
+ * Calculate yearly earnings
+ */
+async function calculateYearlyEarnings(): Promise<{ year: string; earnings: number }[]> {
+  try {
+    const { data: transactions, error } = await supabase
+      .from('chainrise_transactions')
+      .select('created_at, amount, type')
+      .eq('type', 'profit')
+      .order('created_at', { ascending: true });
+
+    if (error || !transactions) {
+      console.error('Error fetching yearly earnings:', error);
+      return [];
+    }
+
+    // Group by year
+    const yearlyData: { [key: string]: number } = {};
+    
+    transactions.forEach(transaction => {
+      const date = new Date(transaction.created_at);
+      const yearKey = date.getFullYear().toString();
+      
+      yearlyData[yearKey] = (yearlyData[yearKey] || 0) + transaction.amount;
+    });
+
+    // Format for chart
+    return Object.entries(yearlyData).map(([year, earnings]) => ({
+      year,
+      earnings
+    }));
+  } catch (err) {
+    console.error('Error in calculateYearlyEarnings:', err);
+    return [];
+  }
+}

@@ -1,10 +1,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { getCryptoAddresses } from '@/lib/updateCryptoAddress'
-import { HiCheck } from 'react-icons/hi'
-import { FaRegCopy } from 'react-icons/fa'
+import { FiCheck, FiCopy, FiAlertCircle, FiShield } from 'react-icons/fi'
 
 type CryptoType = {
   key: 'btc_address' | 'bnb_address' | 'dodge_address' | 'eth_address' | 'solana_address' | 'usdttrc20_address'
@@ -90,91 +89,145 @@ export default function CryptoAddressDisplay() {
     setTimeout(() => setCopiedAddress(null), 2000)
   }
 
+  // Loading State
   if (isLoading) {
     return (
-      <div className="flex justify-center py-12">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-emerald-500 border-t-transparent"></div>
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50/30 py-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          {/* Skeleton Header */}
+          <div className="mb-8 text-center">
+            <div className="h-8 w-64 bg-gray-200 rounded-lg animate-pulse mx-auto mb-2"></div>
+            <div className="h-4 w-96 bg-gray-200 rounded animate-pulse mx-auto"></div>
+          </div>
+
+          {/* Skeleton Stats */}
+          <div className="flex justify-center mb-8">
+            <div className="h-12 w-48 bg-gray-200 rounded-2xl animate-pulse"></div>
+          </div>
+
+          {/* Skeleton Cards Grid */}
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {[...Array(6)].map((_, index) => (
+              <motion.div
+                key={index}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: index * 0.1 }}
+                className="bg-white rounded-2xl shadow-sm p-6 h-48 animate-pulse border"
+              >
+                <div className="flex justify-between items-start mb-4">
+                  <div className="flex items-center space-x-4">
+                    <div className="w-12 h-12 bg-gray-200 rounded-xl"></div>
+                    <div>
+                      <div className="h-4 w-24 bg-gray-200 rounded mb-2"></div>
+                      <div className="h-3 w-32 bg-gray-200 rounded"></div>
+                    </div>
+                  </div>
+                  <div className="w-16 h-6 bg-gray-200 rounded-full"></div>
+                </div>
+                <div className="h-20 bg-gray-200 rounded-xl"></div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-purple-50 p-4">
-      <div className="max-w-7xl mx-auto space-y-8">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50/30 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header Section */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="text-center space-y-4 py-8"
+          transition={{ duration: 0.4 }}
+          className="mb-8 text-center"
         >
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-600 via-blue-600 to-emerald-600 bg-clip-text text-transparent">
+          <h1 className="text-3xl lg:text-4xl font-bold text-gray-900 mb-2">
             Your Crypto Wallets
           </h1>
-          <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+          <p className="text-gray-600 text-lg max-w-2xl mx-auto">
             View and manage your cryptocurrency wallet addresses for receiving payments
           </p>
-          <div className="w-24 h-1 bg-gradient-to-r from-purple-500 to-emerald-500 mx-auto rounded-full"></div>
         </motion.div>
 
         {/* Stats Bar */}
-        <div className="flex justify-center">
-          <div className="p-4 rounded-2xl bg-white/80 backdrop-blur-sm border border-white/20 shadow-lg">
-            <div className="flex items-center space-x-4">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex justify-center mb-8"
+        >
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 px-6 py-4">
+            <div className="flex items-center space-x-3">
               <div className="w-3 h-3 bg-emerald-400 rounded-full animate-pulse"></div>
               <span className="text-sm font-medium text-gray-700">
                 {Object.values(addresses).filter(Boolean).length} of {CRYPTO_TYPES.length} wallets configured
               </span>
             </div>
           </div>
-        </div>
+        </motion.div>
 
         {/* Error Message */}
         {error && (
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="rounded-2xl bg-gradient-to-r from-red-500 to-pink-600 p-6 text-white shadow-xl"
+            className="bg-gradient-to-r from-red-500 to-pink-600 rounded-2xl p-6 text-white shadow-lg mb-8"
           >
             <div className="flex items-center">
-              <span className="mr-3 text-xl">⚠️</span>
+              <FiAlertCircle className="mr-3 text-xl" />
               <p className="font-medium">{error}</p>
             </div>
           </motion.div>
         )}
 
         {/* Crypto Addresses Grid */}
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <motion.div
+          initial="hidden"
+          animate="visible"
+          variants={{
+            visible: {
+              transition: {
+                staggerChildren: 0.1
+              }
+            }
+          }}
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-8"
+        >
           {CRYPTO_TYPES.map((crypto) => {
             const address = addresses[crypto.key]
             const isCopied = copiedAddress === address
+            const cardVariants = {
+              hidden: { opacity: 0, y: 20 },
+              visible: { opacity: 1, y: 0 }
+            }
 
             return (
               <motion.div
                 key={crypto.key}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.4 }}
-                className="group relative"
+                variants={cardVariants}
+                transition={{ duration: 0.3, type: "spring", stiffness: 100 }}
+                className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all duration-300 hover:translate-y-[-2px]"
               >
-                <div className="absolute inset-0 bg-gradient-to-r from-white to-gray-50 rounded-3xl transform group-hover:scale-105 transition-all duration-300 shadow-xl"></div>
-                <div className="relative rounded-3xl border border-white/50 bg-white/30 backdrop-blur-sm p-6 shadow-2xl">
+                <div className="p-6">
                   {/* Header */}
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex items-center space-x-4">
-                      <div className={`flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-r ${crypto.gradient} text-white text-xl font-bold shadow-lg`}>
+                      <div className={`flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-r ${crypto.gradient} text-white text-lg font-bold shadow-sm`}>
                         {crypto.icon}
                       </div>
                       <div>
-                        <h3 className="font-bold text-gray-900 text-lg">{crypto.label}</h3>
-                        <p className="text-sm text-gray-600">
+                        <h3 className="font-semibold text-gray-900">{crypto.label}</h3>
+                        <p className="text-sm text-gray-500">
                           {address ? 'Address configured' : 'No address saved'}
                         </p>
                       </div>
                     </div>
 
                     {address && (
-                      <span className="inline-flex items-center rounded-full bg-gradient-to-r from-green-500 to-emerald-600 px-3 py-1 text-xs font-medium text-white shadow-lg">
-                        ✅ Ready
+                      <span className="inline-flex items-center rounded-full bg-emerald-100 text-emerald-800 px-3 py-1 text-xs font-medium">
+                        Ready
                       </span>
                     )}
                   </div>
@@ -182,33 +235,49 @@ export default function CryptoAddressDisplay() {
                   {/* Address Display */}
                   {address && (
                     <div className="mt-4 space-y-3">
-                      <div className="rounded-xl bg-gray-50/80 border border-gray-200/50 p-4">
+                      <div className="bg-gray-50 rounded-lg border border-gray-200 p-4">
                         <div className="flex items-center justify-between">
                           <p className="text-sm text-gray-600 font-mono truncate flex-1">
                             {address}
                           </p>
                           <button
                             onClick={() => copyToClipboard(address)}
-                            className="ml-3 flex-shrink-0 rounded-xl bg-gradient-to-r from-blue-500 to-purple-600 p-2 text-white hover:shadow-lg transition-all duration-200 transform hover:scale-105"
+                            className="ml-3 flex-shrink-0 inline-flex items-center justify-center w-10 h-10 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200"
                             aria-label="Copy address"
                           >
-                            {isCopied ? (
-                              <HiCheck className="h-4 w-4" />
-                            ) : (
-                              <FaRegCopy className="h-4 w-4" />
-                            )}
+                            <AnimatePresence mode="wait" initial={false}>
+                              {isCopied ? (
+                                <motion.span
+                                  key="check"
+                                  initial={{ opacity: 0, scale: 0.8 }}
+                                  animate={{ opacity: 1, scale: 1 }}
+                                  exit={{ opacity: 0, scale: 0.8 }}
+                                >
+                                  <FiCheck className="h-4 w-4" />
+                                </motion.span>
+                              ) : (
+                                <motion.span
+                                  key="copy"
+                                  initial={{ opacity: 0, scale: 0.8 }}
+                                  animate={{ opacity: 1, scale: 1 }}
+                                  exit={{ opacity: 0, scale: 0.8 }}
+                                >
+                                  <FiCopy className="h-4 w-4" />
+                                </motion.span>
+                              )}
+                            </AnimatePresence>
                           </button>
                         </div>
                       </div>
                       <p className="text-xs text-gray-500 text-center">
-                        {isCopied ? '✓ Copied to clipboard!' : 'Click the copy button to copy this address'}
+                        {isCopied ? '✓ Copied to clipboard!' : 'Click to copy address'}
                       </p>
                     </div>
                   )}
 
                   {/* Empty State */}
                   {!address && (
-                    <div className="mt-4 rounded-xl bg-gradient-to-r from-gray-100 to-gray-200/50 border border-gray-200/30 p-6 text-center">
+                    <div className="mt-4 bg-gray-50 rounded-lg border border-gray-200 p-6 text-center">
                       <div className="text-gray-400 text-2xl mb-2">💳</div>
                       <p className="text-sm text-gray-600 font-medium">
                         No {crypto.label} address saved
@@ -222,20 +291,20 @@ export default function CryptoAddressDisplay() {
               </motion.div>
             )
           })}
-        </div>
+        </motion.div>
 
         {/* Security Notice */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="rounded-2xl bg-gradient-to-r from-green-300 to-green-800 p-6 text-white shadow-xl"
+          className="bg-gradient-to-r from-emerald-500 to-green-600 rounded-2xl p-6 text-white shadow-lg"
         >
           <div className="flex items-start">
-            <span className="text-2xl mr-4">🔒</span>
+            <FiShield className="mr-4 text-xl mt-1 flex-shrink-0" />
             <div>
-              <h3 className="text-lg font-bold mb-2">Security First</h3>
-              <p className="opacity-90">
+              <h3 className="text-lg font-semibold mb-2">Security First</h3>
+              <p className="text-emerald-100 text-sm">
                 Always verify wallet addresses before sending funds. Double-check the first and last few characters when copying. 
                 Never share your private keys or recovery phrases with anyone.
               </p>
