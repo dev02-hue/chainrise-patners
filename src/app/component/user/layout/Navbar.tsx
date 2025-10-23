@@ -125,14 +125,17 @@ export default function Navbar() {
 
           {/* Logo with animation */}
           <motion.div 
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.3 }}
-            className="text-2xl font-bold text-emerald-400 flex items-center"
-          >
-            <span className="bg-emerald-500 text-white rounded-lg px-3 py-1 mr-2">C</span>
-            <span>hainRise-Patners</span>
-          </motion.div>
+  initial={{ opacity: 0, x: -20 }}
+  animate={{ opacity: 1, x: 0 }}
+  transition={{ duration: 0.3 }}
+  className="flex items-center text-lg sm:text-xl md:text-2xl lg:text-3xl xl:text-4xl font-bold text-emerald-400"
+>
+  <span className="bg-emerald-500 text-white rounded-lg px-2 sm:px-3 py-0.5 sm:py-1 mr-1 sm:mr-2">
+    C
+  </span>
+  <span className="truncate">hainRise-Partners</span>
+</motion.div>
+
         </div>
 
         {/* Desktop Nav Items (hidden on mobile) */}

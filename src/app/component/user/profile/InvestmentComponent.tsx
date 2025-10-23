@@ -52,25 +52,49 @@ export default function InvestmentPlatform() {
   const [copiedAddress, setCopiedAddress] = useState('');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  // Enhanced animations
-  const containerVariants = {
+  // Enhanced animations with staggered effects
+  const containerVariants: Variants = {
     hidden: { opacity: 0 },
     visible: {
       opacity: 1,
       transition: {
-        staggerChildren: 0.1
+        staggerChildren: 0.15
       }
     }
   };
 
   const itemVariants: Variants = {
-    hidden: { y: 20, opacity: 0 },
+    hidden: { y: 25, opacity: 0, scale: 0.95 },
     visible: {
       y: 0,
       opacity: 1,
+      scale: 1,
       transition: {
-        type: "spring" as const,
-        stiffness: 100
+        type: "spring",
+        stiffness: 120,
+        damping: 20
+      }
+    }
+  };
+
+  const cardVariants: Variants = {
+    hidden: { opacity: 0, y: 30 },
+    visible: {
+      opacity: 1,
+      y: 0,
+      transition: {
+        type: "spring",
+        stiffness: 100,
+        damping: 15
+      }
+    },
+    hover: {
+      y: -8,
+      scale: 1.02,
+      transition: {
+        type: "spring",
+        stiffness: 400,
+        damping: 25
       }
     }
   };
@@ -84,14 +108,14 @@ export default function InvestmentPlatform() {
         type: "spring",
         stiffness: 300,
         damping: 30
-      } as any
+      }
     },
     exit: { 
       opacity: 0, 
       scale: 0.95,
       transition: {
         duration: 0.2
-      } as any
+      }
     }
   };
 
@@ -190,7 +214,6 @@ export default function InvestmentPlatform() {
         });
         setActiveTab('history');
         
-        // Enhanced success notification
         alert('Deposit initiated successfully! Please wait for admin approval.');
       }
     } catch (err) {
@@ -213,10 +236,10 @@ export default function InvestmentPlatform() {
     const iconClass = "text-base sm:text-xl";
     switch (symbol.toUpperCase()) {
       case 'BTC': return <FaBitcoin className={`${iconClass} text-orange-500`} />;
-      case 'ETH': return <FaEthereum className={`${iconClass} text-gray-400`} />;
+      case 'ETH': return <FaEthereum className={`${iconClass} text-gray-600`} />;
       case 'BNB': return <SiBinance className={`${iconClass} text-yellow-500`} />;
       case 'SOL': return <SiSolana className={`${iconClass} text-purple-500`} />;
-      case 'USDT': return <SiTether className={`${iconClass} text-green-500`} />;
+      case 'USDT': return <SiTether className={`${iconClass} text-emerald-500`} />;
       case 'XRP': return <SiRipple className={`${iconClass} text-blue-500`} />;
       case 'LTC': return <SiLitecoin className={`${iconClass} text-blue-400`} />;
       default: return <div className={`${iconClass} text-gray-500`} />;
@@ -228,8 +251,8 @@ export default function InvestmentPlatform() {
       case 'completed': return 'bg-emerald-100 text-emerald-800 border-emerald-200';
       case 'confirmed': return 'bg-blue-100 text-blue-800 border-blue-200';
       case 'pending': return 'bg-amber-100 text-amber-800 border-amber-200';
-      case 'cancelled': return 'bg-red-100 text-red-800 border-red-200';
-      case 'failed': return 'bg-red-100 text-red-800 border-red-200';
+      case 'cancelled': return 'bg-rose-100 text-rose-800 border-rose-200';
+      case 'failed': return 'bg-rose-100 text-rose-800 border-rose-200';
       default: return 'bg-gray-100 text-gray-800 border-gray-200';
     }
   };
@@ -238,36 +261,38 @@ export default function InvestmentPlatform() {
     return `${plan.title} ($${plan.min_amount}-${plan.max_amount ? `$${plan.max_amount}` : 'Unlimited'})`;
   };
 
-  // Mobile menu toggle
   const toggleMobileMenu = () => {
     setIsMobileMenuOpen(!isMobileMenuOpen);
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-blue-900 py-4 sm:py-8 px-3 sm:px-4">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-blue-100 py-4 sm:py-8 px-3 sm:px-4">
       <div className="max-w-7xl mx-auto">
-        {/* Enhanced Header */}
+        {/* Enhanced Header with Light Theme */}
         <motion.div
           initial={{ opacity: 0, y: -30 }}
           animate={{ opacity: 1, y: 0 }}
+          transition={{ type: "spring", stiffness: 100, damping: 20 }}
           className="text-center mb-8 sm:mb-12"
         >
-          <h1 className="text-2xl xs:text-3xl sm:text-4xl md:text-5xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-3 sm:mb-4">
+          <h1 className="text-2xl xs:text-3xl sm:text-4xl md:text-5xl font-bold bg-gradient-to-r from-blue-600 to-blue-800 bg-clip-text text-transparent mb-3 sm:mb-4">
             Quantum Invest
           </h1>
-          <p className="text-sm xs:text-base sm:text-lg text-gray-600 dark:text-gray-300 max-w-2xl mx-auto px-2">
+          <p className="text-sm xs:text-base sm:text-lg text-gray-600 max-w-2xl mx-auto px-2 font-medium">
             Professional cryptocurrency investment platform with institutional-grade security and returns
           </p>
         </motion.div>
 
         {/* Mobile Menu Button */}
         <div className="flex justify-center mb-6 sm:hidden">
-          <button
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
             onClick={toggleMobileMenu}
-            className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-xl p-3 shadow-lg border border-gray-200 dark:border-slate-700"
+            className="bg-white/90 backdrop-blur-sm rounded-2xl p-3 shadow-sm border border-gray-200"
           >
             {isMobileMenuOpen ? <FaTimes /> : <FaBars />}
-          </button>
+          </motion.button>
         </div>
 
         {/* Enhanced Navigation Tabs */}
@@ -277,35 +302,37 @@ export default function InvestmentPlatform() {
           animate={{ opacity: 1 }}
           transition={{ delay: 0.2 }}
         >
-          <div className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-2xl p-2 shadow-lg border border-gray-200 dark:border-slate-700 w-full max-w-md sm:max-w-none">
-            <div className="flex flex-col xs:flex-row space-y-2 xs:space-y-0 xs:space-x-1">
+          <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-2 shadow-sm border border-gray-200 w-full max-w-md sm:max-w-none">
+            <div className="flex flex-col xs:flex-row gap-2">
               {[
                 { id: 'plans', label: 'Investment Plans', icon: FaMoneyBillWave },
                 { id: 'deposit', label: 'Make Deposit', icon: FaExchangeAlt },
                 { id: 'history', label: 'Transaction History', icon: FaHistory }
               ].map((tab) => (
-                <button
+                <motion.button
                   key={tab.id}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
                   onClick={() => {
                     setActiveTab(tab.id);
                     setIsMobileMenuOpen(false);
                   }}
-                  className={`relative px-4 xs:px-6 py-3 rounded-xl font-medium transition-all duration-300 flex items-center justify-center xs:justify-start space-x-2 ${
+                  className={`relative px-4 xs:px-6 py-3 rounded-xl font-semibold transition-all duration-300 flex items-center justify-center xs:justify-start space-x-2 ${
                     activeTab === tab.id 
                       ? 'text-white' 
-                      : 'text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400'
+                      : 'text-gray-600 hover:text-blue-600'
                   }`}
                 >
                   {activeTab === tab.id && (
                     <motion.div
                       layoutId="activeTab"
-                      className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-500 rounded-xl"
+                      className="absolute inset-0 bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl"
                       transition={{ type: "spring", stiffness: 300, damping: 30 }}
                     />
                   )}
                   <tab.icon className="relative z-10 text-sm xs:text-base" />
                   <span className="relative z-10 text-sm xs:text-base whitespace-nowrap">{tab.label}</span>
-                </button>
+                </motion.button>
               ))}
             </div>
           </div>
@@ -318,15 +345,15 @@ export default function InvestmentPlatform() {
             initial="hidden"
             animate="visible"
             exit="exit"
-            className="bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm rounded-2xl sm:rounded-3xl shadow-xl sm:shadow-2xl border border-gray-200 dark:border-slate-700 overflow-hidden"
+            className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden"
           >
             {/* Investment Plans Tab */}
             {activeTab === 'plans' && (
               <div className="p-4 sm:p-6 md:p-8">
                 <motion.h2 
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="text-xl xs:text-2xl sm:text-3xl font-bold text-gray-800 dark:text-white mb-6 sm:mb-8 text-center"
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="text-xl xs:text-2xl sm:text-3xl font-bold text-gray-800 mb-6 sm:mb-8 text-center"
                 >
                   Premium Investment Strategies
                 </motion.h2>
@@ -343,10 +370,10 @@ export default function InvestmentPlatform() {
                   <motion.div 
                     initial={{ opacity: 0, scale: 0.9 }}
                     animate={{ opacity: 1, scale: 1 }}
-                    className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl sm:rounded-2xl p-4 sm:p-6 text-center"
+                    className="bg-rose-50 border border-rose-200 rounded-xl p-4 sm:p-6 text-center"
                   >
-                    <div className="text-red-500 text-lg mb-2">⚠️</div>
-                    <p className="text-red-700 dark:text-red-300 text-sm sm:text-base">{error.plans}</p>
+                    <div className="text-rose-500 text-lg mb-2">⚠️</div>
+                    <p className="text-rose-700 text-sm sm:text-base font-medium">{error.plans}</p>
                   </motion.div>
                 ) : (
                   <motion.div
@@ -355,48 +382,48 @@ export default function InvestmentPlatform() {
                     animate="visible"
                     className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 md:gap-8"
                   >
-                    {plans.map((plan ) => (
+                    {plans.map((plan) => (
                       <motion.div
                         key={plan.id}
-                        variants={itemVariants}
-                        whileHover={{ 
-                          y: -4,
-                          transition: { type: "spring", stiffness: 300 }
-                        }}
-                        className="group relative bg-gradient-to-br from-white to-gray-50 dark:from-slate-800 dark:to-slate-700 rounded-xl sm:rounded-2xl p-4 sm:p-6 md:p-8 shadow-lg border border-gray-200 dark:border-slate-600 hover:shadow-xl sm:hover:shadow-2xl transition-all duration-300"
+                        variants={cardVariants}
+                        initial="hidden"
+                        animate="visible"
+                        whileHover="hover"
+                        className="group relative bg-white rounded-2xl p-6 shadow-sm border border-gray-200 hover:shadow-lg transition-all duration-300"
                       >
                         {/* Premium Badge */}
-                        <div className="absolute -top-2 xs:-top-3 left-1/2 transform -translate-x-1/2">
-                          <span className="bg-gradient-to-r from-blue-500 to-purple-500 text-white px-3 py-1 xs:px-4 xs:py-1 rounded-full text-xs xs:text-sm font-medium shadow-lg">
+                        <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
+                          <span className="bg-gradient-to-r from-blue-500 to-purple-500 text-white px-4 py-1 rounded-full text-xs font-semibold shadow-lg">
                             {plan.title}
                           </span>
                         </div>
 
-                        <div className="text-center mb-4 sm:mb-6 pt-4 sm:pt-4">
+                        {/* Gradient Background for Stats */}
+                        <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-2xl p-6 mb-6 text-center">
                           <motion.div 
-                            className="text-3xl xs:text-4xl sm:text-5xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-2"
+                            className="text-4xl sm:text-5xl font-bold bg-gradient-to-r from-emerald-600 to-emerald-500 bg-clip-text text-transparent mb-2"
                             whileInView={{ scale: [0.8, 1] }}
                             transition={{ type: "spring", stiffness: 200 }}
                           >
                             {plan.daily_profit_percentage}%
                           </motion.div>
-                          <div className="text-gray-500 dark:text-gray-400 text-sm xs:text-base">Daily Return</div>
+                          <div className="text-gray-600 text-sm font-medium">Daily Return</div>
                         </div>
 
-                        <div className="space-y-3 sm:space-y-4 mb-6 sm:mb-8">
-                          <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-slate-600">
-                            <span className="text-gray-600 dark:text-gray-300 text-sm xs:text-base">Investment Range</span>
-                            <span className="font-semibold text-gray-800 dark:text-white text-sm xs:text-base">
+                        <div className="space-y-4 mb-6">
+                          <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                            <span className="text-gray-600 text-sm font-medium">Investment Range</span>
+                            <span className="font-semibold text-gray-800 text-sm">
                               ${plan.min_amount} - {plan.max_amount ? `$${plan.max_amount}` : '∞'}
                             </span>
                           </div>
-                          <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-slate-600">
-                            <span className="text-gray-600 dark:text-gray-300 text-sm xs:text-base">Duration</span>
-                            <span className="font-semibold text-gray-800 dark:text-white text-sm xs:text-base">{plan.duration_days} Days</span>
+                          <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                            <span className="text-gray-600 text-sm font-medium">Duration</span>
+                            <span className="font-semibold text-gray-800 text-sm">{plan.duration_days} Days</span>
                           </div>
                           <div className="flex justify-between items-center py-2">
-                            <span className="text-gray-600 dark:text-gray-300 text-sm xs:text-base">Total Return</span>
-                            <span className="font-semibold text-green-500 text-sm xs:text-base">{plan.total_return_percentage}%</span>
+                            <span className="text-gray-600 text-sm font-medium">Total Return</span>
+                            <span className="font-semibold text-emerald-500 text-sm">{plan.total_return_percentage}%</span>
                           </div>
                         </div>
 
@@ -407,10 +434,10 @@ export default function InvestmentPlatform() {
                             setFormData(prev => ({ ...prev, planId: plan.id }));
                             setActiveTab('deposit');
                           }}
-                          className="w-full bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white font-semibold py-3 sm:py-4 px-4 sm:px-6 rounded-xl transition-all duration-300 flex items-center justify-center space-x-2 group text-sm xs:text-base"
+                          className="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-semibold py-4 px-6 rounded-xl transition-all duration-300 flex items-center justify-center space-x-2 group text-sm"
                         >
                           <span>Start Investing</span>
-                          <FaChevronRight className="transform group-hover:translate-x-1 transition-transform text-xs xs:text-sm" />
+                          <FaChevronRight className="transform group-hover:translate-x-1 transition-transform text-xs" />
                         </motion.button>
                       </motion.div>
                     ))}
@@ -423,28 +450,28 @@ export default function InvestmentPlatform() {
             {activeTab === 'deposit' && (
               <div className="p-4 sm:p-6 md:p-8">
                 <motion.h2 
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="text-xl xs:text-2xl sm:text-3xl font-bold text-gray-800 dark:text-white mb-6 sm:mb-8 text-center"
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="text-xl xs:text-2xl sm:text-3xl font-bold text-gray-800 mb-6 sm:mb-8 text-center"
                 >
                   Secure Deposit
                 </motion.h2>
                 
-                <form onSubmit={handleSubmit} className="max-w-2xl mx-auto space-y-4 sm:space-y-6">
+                <form onSubmit={handleSubmit} className="max-w-2xl mx-auto space-y-6">
                   {/* Plan Selection */}
                   <motion.div
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
-                    className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 rounded-xl sm:rounded-2xl p-4 sm:p-6 border border-blue-200 dark:border-blue-800"
+                    className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200"
                   >
-                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+                    <label className="block text-sm font-semibold text-gray-700 mb-3">
                       Investment Plan
                     </label>
                     <select
                       name="planId"
                       value={formData.planId}
                       onChange={handleInputChange}
-                      className="w-full p-3 sm:p-4 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-300 text-sm sm:text-base"
+                      className="w-full p-4 bg-gray-50 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-300 text-sm"
                       required
                     >
                       <option value="">Select your investment strategy</option>
@@ -461,9 +488,9 @@ export default function InvestmentPlatform() {
                     initial={{ opacity: 0, x: 20 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: 0.1 }}
-                    className="bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 rounded-xl sm:rounded-2xl p-4 sm:p-6 border border-purple-200 dark:border-purple-800"
+                    className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200"
                   >
-                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+                    <label className="block text-sm font-semibold text-gray-700 mb-3">
                       Investment Amount ($)
                     </label>
                     <input
@@ -471,14 +498,14 @@ export default function InvestmentPlatform() {
                       name="amount"
                       value={formData.amount || ''}
                       onChange={handleInputChange}
-                      className="w-full p-3 sm:p-4 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-300 text-sm sm:text-base"
+                      className="w-full p-4 bg-gray-50 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-300 text-sm"
                       min={selectedPlan?.min_amount || 0}
                       max={selectedPlan?.max_amount || 100000}
                       step="0.01"
                       required
                     />
                     {selectedPlan && (
-                      <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mt-2">
+                      <p className="text-xs text-gray-600 mt-2 font-medium">
                         Range: ${selectedPlan.min_amount} - ${selectedPlan.max_amount || 'Unlimited'}
                       </p>
                     )}
@@ -489,12 +516,12 @@ export default function InvestmentPlatform() {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.2 }}
-                    className="bg-white dark:bg-slate-700 rounded-xl sm:rounded-2xl p-4 sm:p-6 border border-gray-200 dark:border-slate-600"
+                    className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200"
                   >
-                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+                    <label className="block text-sm font-semibold text-gray-700 mb-3">
                       Payment Method
                     </label>
-                    <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-4 gap-2 sm:gap-3 mb-4">
+                    <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-4 gap-3 mb-4">
                       {paymentOptions.map((option) => (
                         <motion.button
                           key={option.id}
@@ -502,14 +529,14 @@ export default function InvestmentPlatform() {
                           whileHover={{ scale: 1.05 }}
                           whileTap={{ scale: 0.95 }}
                           onClick={() => setFormData(prev => ({ ...prev, cryptoType: option.symbol }))}
-                          className={`p-3 sm:p-4 rounded-lg sm:rounded-xl border-2 transition-all duration-300 flex flex-col items-center space-y-1 sm:space-y-2 ${
+                          className={`p-4 rounded-xl border-2 transition-all duration-300 flex flex-col items-center space-y-2 ${
                             formData.cryptoType === option.symbol
-                              ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                              : 'border-gray-200 dark:border-slate-600 hover:border-gray-300'
+                              ? 'border-purple-500 bg-purple-50'
+                              : 'border-gray-200 hover:border-gray-300'
                           }`}
                         >
                           {getCryptoIcon(option.symbol)}
-                          <span className="text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300">
+                          <span className="text-xs font-semibold text-gray-700">
                             {option.symbol}
                           </span>
                         </motion.button>
@@ -522,42 +549,42 @@ export default function InvestmentPlatform() {
                     <motion.div
                       initial={{ opacity: 0, height: 0 }}
                       animate={{ opacity: 1, height: 'auto' }}
-                      className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-xl sm:rounded-2xl p-4 sm:p-6 border border-green-200 dark:border-green-800"
+                      className="bg-gradient-to-br from-emerald-50 to-emerald-100 rounded-2xl p-6 border border-emerald-200"
                     >
-                      <div className="flex items-center justify-between mb-3 sm:mb-4">
-                        <div className="flex items-center space-x-2 sm:space-x-3">
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center space-x-3">
                           {getCryptoIcon(selectedCrypto.symbol)}
                           <div>
-                            <h4 className="font-semibold text-gray-800 dark:text-white text-sm sm:text-base">{selectedCrypto.name}</h4>
-                            <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">{selectedCrypto.network} Network</p>
+                            <h4 className="font-semibold text-gray-800 text-sm">{selectedCrypto.name}</h4>
+                            <p className="text-xs text-gray-600 font-medium">{selectedCrypto.network} Network</p>
                           </div>
                         </div>
-                        <div className="flex space-x-1 sm:space-x-2">
+                        <div className="flex space-x-2">
                           <motion.button
                             whileHover={{ scale: 1.05 }}
                             whileTap={{ scale: 0.95 }}
                             onClick={() => copyToClipboard(selectedCrypto.walletAddress)}
-                            className="p-2 bg-white dark:bg-slate-700 rounded-lg border border-gray-200 dark:border-slate-600 hover:bg-gray-50 transition-colors"
+                            className="p-2 bg-white rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
                           >
-                            <FaCopy className="text-gray-600 dark:text-gray-400 text-sm" />
+                            <FaCopy className="text-gray-600 text-sm" />
                           </motion.button>
                           <motion.button
                             whileHover={{ scale: 1.05 }}
                             whileTap={{ scale: 0.95 }}
-                            className="p-2 bg-white dark:bg-slate-700 rounded-lg border border-gray-200 dark:border-slate-600 hover:bg-gray-50 transition-colors"
+                            className="p-2 bg-white rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
                           >
-                            <FaQrcode className="text-gray-600 dark:text-gray-400 text-sm" />
+                            <FaQrcode className="text-gray-600 text-sm" />
                           </motion.button>
                         </div>
                       </div>
                       
-                      <div className="space-y-2 sm:space-y-3">
+                      <div className="space-y-3">
                         <div>
-                          <label className="text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">
+                          <label className="text-xs font-semibold text-gray-700 mb-1 block">
                             Wallet Address
                           </label>
-                          <div className="p-2 sm:p-3 bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-600">
-                            <code className="text-xs sm:text-sm break-all text-gray-800 dark:text-gray-200">
+                          <div className="p-3 bg-white rounded-lg border border-gray-200">
+                            <code className="text-xs break-all text-gray-800 font-medium">
                               {selectedCrypto.walletAddress}
                             </code>
                           </div>
@@ -565,13 +592,13 @@ export default function InvestmentPlatform() {
                             <motion.p
                               initial={{ opacity: 0 }}
                               animate={{ opacity: 1 }}
-                              className="text-green-500 text-xs sm:text-sm mt-1"
+                              className="text-emerald-500 text-xs mt-1 font-medium"
                             >
                               ✓ Copied to clipboard!
                             </motion.p>
                           )}
                         </div>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 text-center">
+                        <p className="text-xs text-gray-500 text-center font-medium">
                           ⚠️ Send only {selectedCrypto.symbol} to this address on the {selectedCrypto.network} network
                         </p>
                       </div>
@@ -583,8 +610,9 @@ export default function InvestmentPlatform() {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.3 }}
+                    className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200"
                   >
-                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+                    <label className="block text-sm font-semibold text-gray-700 mb-3">
                       Transaction Hash (Optional)
                     </label>
                     <input
@@ -593,7 +621,7 @@ export default function InvestmentPlatform() {
                       value={formData.transactionHash}
                       onChange={handleInputChange}
                       placeholder="Enter your transaction hash for faster verification"
-                      className="w-full p-3 sm:p-4 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-300 text-sm sm:text-base"
+                      className="w-full p-4 bg-gray-50 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-300 text-sm"
                     />
                   </motion.div>
 
@@ -603,14 +631,14 @@ export default function InvestmentPlatform() {
                     disabled={loading.form}
                     whileHover={{ scale: loading.form ? 1 : 1.02 }}
                     whileTap={{ scale: loading.form ? 1 : 0.98 }}
-                    className="w-full bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 disabled:from-gray-400 disabled:to-gray-500 text-white font-semibold py-3 sm:py-4 px-4 sm:px-6 rounded-xl transition-all duration-300 flex items-center justify-center space-x-2 shadow-lg text-sm sm:text-base"
+                    className="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 disabled:from-gray-400 disabled:to-gray-500 text-white font-semibold py-4 px-6 rounded-xl transition-all duration-300 flex items-center justify-center space-x-2 shadow-sm text-sm"
                   >
                     {loading.form ? (
                       <>
                         <motion.div
                           animate={{ rotate: 360 }}
                           transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                          className="w-4 h-4 sm:w-5 sm:h-5 border-2 border-white border-t-transparent rounded-full"
+                          className="w-5 h-5 border-2 border-white border-t-transparent rounded-full"
                         />
                         <span>Processing Deposit...</span>
                       </>
@@ -626,9 +654,9 @@ export default function InvestmentPlatform() {
             {activeTab === 'history' && (
               <div className="p-4 sm:p-6 md:p-8">
                 <motion.h2 
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="text-xl xs:text-2xl sm:text-3xl font-bold text-gray-800 dark:text-white mb-6 sm:mb-8 text-center"
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="text-xl xs:text-2xl sm:text-3xl font-bold text-gray-800 mb-6 sm:mb-8 text-center"
                 >
                   Transaction History
                 </motion.h2>
@@ -645,22 +673,22 @@ export default function InvestmentPlatform() {
                   <motion.div 
                     initial={{ opacity: 0, scale: 0.9 }}
                     animate={{ opacity: 1, scale: 1 }}
-                    className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl sm:rounded-2xl p-4 sm:p-6 text-center"
+                    className="bg-rose-50 border border-rose-200 rounded-xl p-6 text-center"
                   >
-                    <div className="text-red-500 text-lg mb-2">⚠️</div>
-                    <p className="text-red-700 dark:text-red-300 text-sm sm:text-base">{error.deposits}</p>
+                    <div className="text-rose-500 text-lg mb-2">⚠️</div>
+                    <p className="text-rose-700 text-sm font-medium">{error.deposits}</p>
                   </motion.div>
                 ) : deposits.length === 0 ? (
                   <motion.div 
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="text-center py-12 sm:py-16"
+                    className="text-center py-16"
                   >
-                    <div className="text-4xl sm:text-6xl mb-4">📊</div>
-                    <h3 className="text-lg sm:text-xl font-semibold text-gray-600 dark:text-gray-400 mb-2">
+                    <div className="text-6xl mb-4">📊</div>
+                    <h3 className="text-xl font-semibold text-gray-600 mb-2">
                       No Transactions Yet
                     </h3>
-                    <p className="text-gray-500 dark:text-gray-500 text-sm sm:text-base">
+                    <p className="text-gray-500 text-sm font-medium">
                       Start your investment journey by making your first deposit
                     </p>
                   </motion.div>
@@ -669,25 +697,26 @@ export default function InvestmentPlatform() {
                     variants={containerVariants}
                     initial="hidden"
                     animate="visible"
-                    className="space-y-3 sm:space-y-4"
+                    className="space-y-4"
                   >
                     {deposits.map((deposit, index) => (
                       <motion.div
                         key={deposit.id}
                         variants={itemVariants}
                         transition={{ delay: index * 0.1 }}
-                        className="bg-white dark:bg-slate-700 rounded-xl sm:rounded-2xl p-4 sm:p-6 border border-gray-200 dark:border-slate-600 hover:shadow-lg transition-all duration-300"
+                        whileHover={{ y: -2 }}
+                        className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200 hover:shadow-lg transition-all duration-300"
                       >
-                        <div className="flex flex-col xs:flex-row xs:items-center justify-between space-y-3 xs:space-y-0">
-                          <div className="flex items-center space-x-3">
-                            <div className="p-2 sm:p-3 bg-blue-100 dark:bg-blue-900/20 rounded-lg sm:rounded-xl">
+                        <div className="flex flex-col xs:flex-row xs:items-center justify-between gap-4">
+                          <div className="flex items-center space-x-4">
+                            <div className="p-3 bg-blue-100 rounded-xl">
                               {getCryptoIcon(deposit.cryptoType)}
                             </div>
                             <div>
-                              <h4 className="font-semibold text-gray-800 dark:text-white text-sm sm:text-base">
+                              <h4 className="font-semibold text-gray-800 text-sm">
                                 {deposit.planTitle || 'Investment Plan'}
                               </h4>
-                              <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">
+                              <p className="text-xs text-gray-600 font-medium">
                                 {new Date(deposit.createdAt).toLocaleDateString('en-US', {
                                   year: 'numeric',
                                   month: 'short',
@@ -700,10 +729,10 @@ export default function InvestmentPlatform() {
                           </div>
                           
                           <div className="text-right">
-                            <div className="text-xl sm:text-2xl font-bold text-gray-800 dark:text-white mb-1">
+                            <div className="text-2xl font-bold text-gray-800 mb-1">
                               ${deposit.amount.toFixed(2)}
                             </div>
-                            <span className={`inline-flex items-center px-2 py-1 sm:px-3 sm:py-1 rounded-full text-xs sm:text-sm font-medium border ${getStatusColor(deposit.status)}`}>
+                            <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border ${getStatusColor(deposit.status)}`}>
                               {deposit.status.charAt(0).toUpperCase() + deposit.status.slice(1)}
                             </span>
                           </div>

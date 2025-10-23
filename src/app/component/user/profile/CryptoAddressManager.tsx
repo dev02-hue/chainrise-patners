@@ -7,8 +7,8 @@ import {
   getCryptoAddresses, 
   updateCryptoAddress,
   updateMultipleCryptoAddresses,
- 
 } from '@/lib/updateCryptoAddress'
+import { FiCheck, FiCopy, FiEdit, FiSave, FiTrash2, FiAlertCircle, FiShield, FiRefreshCw } from 'react-icons/fi'
 
 type CryptoAddressType = 'btc_address' | 'bnb_address' | 'dodge_address' | 'eth_address' | 'solana_address' | 'usdttrc20_address'
 
@@ -80,6 +80,7 @@ export default function CryptoAddressManager() {
   const [isBulkEditing, setIsBulkEditing] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [copiedAddress, setCopiedAddress] = useState<string | null>(null)
 
   useEffect(() => {
     loadData()
@@ -177,8 +178,12 @@ export default function CryptoAddressManager() {
     if (!address) return
     
     navigator.clipboard.writeText(address)
+    setCopiedAddress(address)
     setSuccess(`${type} address copied to clipboard!`)
-    setTimeout(() => setSuccess(''), 3000)
+    setTimeout(() => {
+      setCopiedAddress(null)
+      setSuccess('')
+    }, 3000)
   }
 
   const hasChanges = (type: CryptoAddressType) => {
@@ -189,72 +194,110 @@ export default function CryptoAddressManager() {
     return CRYPTO_TYPES.some(crypto => hasChanges(crypto.key))
   }
 
+  // Loading State
   if (isLoading) {
     return (
-      <div className="flex justify-center py-12">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-emerald-500 border-t-transparent"></div>
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50/30 py-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          {/* Skeleton Header */}
+          <div className="mb-8 text-center">
+            <div className="h-8 w-64 bg-gray-200 rounded-lg animate-pulse mx-auto mb-2"></div>
+            <div className="h-4 w-96 bg-gray-200 rounded animate-pulse mx-auto"></div>
+          </div>
+
+          {/* Skeleton Control Bar */}
+          <div className="flex justify-between mb-8">
+            <div className="h-12 w-48 bg-gray-200 rounded-2xl animate-pulse"></div>
+            <div className="h-12 w-32 bg-gray-200 rounded-2xl animate-pulse"></div>
+          </div>
+
+          {/* Skeleton Cards Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[...Array(6)].map((_, index) => (
+              <motion.div
+                key={index}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: index * 0.1 }}
+                className="bg-white rounded-2xl shadow-sm p-6 h-64 animate-pulse border"
+              >
+                <div className="flex justify-between items-start mb-4">
+                  <div className="flex items-center space-x-4">
+                    <div className="w-12 h-12 bg-gray-200 rounded-xl"></div>
+                    <div>
+                      <div className="h-4 w-24 bg-gray-200 rounded mb-2"></div>
+                      <div className="h-3 w-32 bg-gray-200 rounded"></div>
+                    </div>
+                  </div>
+                  <div className="w-20 h-6 bg-gray-200 rounded-full"></div>
+                </div>
+                <div className="h-24 bg-gray-200 rounded-xl mb-4"></div>
+                <div className="h-10 bg-gray-200 rounded-lg"></div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-purple-50 p-4">
-      <div className="max-w-7xl mx-auto space-y-8">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50/30 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header Section */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="text-center space-y-4 py-8"
+          transition={{ duration: 0.4 }}
+          className="mb-8"
         >
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-600 via-blue-600 to-emerald-600 bg-clip-text text-transparent">
-            Crypto Wallet Manager
-          </h1>
-          <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-            Manage all your cryptocurrency wallet addresses in one secure place
-          </p>
-          <div className="w-24 h-1 bg-gradient-to-r from-purple-500 to-emerald-500 mx-auto rounded-full"></div>
-        </motion.div>
-
-        {/* Control Bar */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div className="flex items-center space-x-4">
-            <div className="p-3 rounded-2xl bg-white/80 backdrop-blur-sm border border-white/20 shadow-lg">
-              <div className="flex items-center space-x-2">
-                <div className="w-3 h-3 bg-emerald-400 rounded-full animate-pulse"></div>
-                <span className="text-sm font-medium text-gray-700">
-                  {CRYPTO_TYPES.filter(crypto => addresses[crypto.key]).length} of {CRYPTO_TYPES.length} wallets configured
-                </span>
-              </div>
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+            <div>
+              <h1 className="text-3xl lg:text-4xl font-bold text-gray-900 mb-2">
+                Crypto Wallet Manager
+              </h1>
+              <p className="text-gray-600 text-lg">Manage all your cryptocurrency wallet addresses in one secure place</p>
+            </div>
+            
+            {/* Quick Actions */}
+            <div className="flex flex-wrap gap-3">
+              <button
+                onClick={() => setIsBulkEditing(!isBulkEditing)}
+                className={`inline-flex items-center px-4 py-2 font-medium rounded-lg transition-colors duration-200 ${
+                  isBulkEditing
+                    ? 'bg-amber-600 hover:bg-amber-700 text-white'
+                    : 'bg-blue-600 hover:bg-blue-700 text-white'
+                }`}
+              >
+                <FiEdit className="mr-2" />
+                {isBulkEditing ? 'Cancel Bulk Edit' : 'Bulk Edit'}
+              </button>
+              <button 
+                onClick={loadData}
+                className="inline-flex items-center px-4 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 font-medium rounded-lg transition-colors duration-200"
+              >
+                <FiRefreshCw className="mr-2" />
+                Refresh
+              </button>
             </div>
           </div>
-          
-          <div className="flex space-x-3">
-            {isBulkEditing ? (
-              <>
-                <button
-                  onClick={() => setIsBulkEditing(false)}
-                  className="inline-flex items-center rounded-2xl border border-gray-300 bg-white/80 backdrop-blur-sm px-6 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-all duration-200 shadow-lg hover:shadow-xl"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleBulkSave}
-                  disabled={isSaving === 'bulk' || !hasAnyChanges()}
-                  className="inline-flex items-center rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 px-6 py-3 text-sm font-medium text-white hover:from-emerald-600 hover:to-teal-700 disabled:opacity-50 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105"
-                >
-                  {isSaving === 'bulk' ? 'Saving All...' : 'Save All Changes'}
-                </button>
-              </>
-            ) : (
-              <button
-                onClick={() => setIsBulkEditing(true)}
-                className="inline-flex items-center rounded-2xl bg-gradient-to-r from-blue-500 to-purple-600 px-6 py-3 text-sm font-medium text-white hover:from-blue-600 hover:to-purple-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105"
-              >
-                ✨ Bulk Edit Mode
-              </button>
-            )}
+        </motion.div>
+
+        {/* Stats Bar */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex justify-center mb-8"
+        >
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 px-6 py-4">
+            <div className="flex items-center space-x-3">
+              <div className="w-3 h-3 bg-emerald-400 rounded-full animate-pulse"></div>
+              <span className="text-sm font-medium text-gray-700">
+                {CRYPTO_TYPES.filter(crypto => addresses[crypto.key]).length} of {CRYPTO_TYPES.length} wallets configured
+              </span>
+            </div>
           </div>
-        </div>
+        </motion.div>
 
         {/* Status Messages */}
         <AnimatePresence>
@@ -263,10 +306,10 @@ export default function CryptoAddressManager() {
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0 }}
-              className="rounded-2xl bg-gradient-to-r from-red-500 to-pink-600 p-6 text-white shadow-xl"
+              className="bg-gradient-to-r from-red-500 to-pink-600 rounded-2xl p-6 text-white shadow-lg mb-8"
             >
               <div className="flex items-center">
-                <span className="mr-3 text-xl">⚠️</span>
+                <FiAlertCircle className="mr-3 text-xl" />
                 <p className="font-medium">{error}</p>
               </div>
             </motion.div>
@@ -277,141 +320,216 @@ export default function CryptoAddressManager() {
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0 }}
-              className="rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 p-6 text-white shadow-xl"
+              className="bg-gradient-to-r from-emerald-500 to-green-600 rounded-2xl p-6 text-white shadow-lg mb-8"
             >
               <div className="flex items-center">
-                <span className="mr-3 text-xl">✅</span>
+                <FiCheck className="mr-3 text-xl" />
                 <p className="font-medium">{success}</p>
               </div>
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* Crypto Addresses Grid */}
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {CRYPTO_TYPES.map((crypto) => (
-            <motion.div
-              key={crypto.key}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4 }}
-              className="group relative"
-            >
-              <div className="absolute inset-0 bg-gradient-to-r from-white to-gray-50 rounded-3xl transform group-hover:scale-105 transition-all duration-300 shadow-xl"></div>
-              <div className="relative rounded-3xl border border-white/50 bg-white/30 backdrop-blur-sm p-6 shadow-2xl">
-                {/* Header */}
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center space-x-4">
-                    <div className={`flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-r ${crypto.gradient} text-white text-xl font-bold shadow-lg`}>
-                      {crypto.icon}
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-gray-900 text-lg">{crypto.label}</h3>
-                      <p className="text-sm text-gray-600">{crypto.description}</p>
-                    </div>
-                  </div>
-
-                  {!isBulkEditing && addresses[crypto.key] && (
-                    <span className="inline-flex items-center rounded-full bg-gradient-to-r from-green-500 to-emerald-600 px-3 py-1 text-xs font-medium text-white shadow-lg">
-                      ✅ Configured
-                    </span>
-                  )}
-                </div>
-
-                {/* Address Display */}
-                {addresses[crypto.key] && !isBulkEditing && (
-                  <div className="mb-4 p-3 rounded-xl bg-gray-50/80 border border-gray-200/50">
-                    <div className="flex items-center justify-between">
-                      <p className="text-xs text-gray-600 font-mono truncate flex-1">
-                        {addresses[crypto.key]}
-                      </p>
-                      <button
-                        onClick={() => handleCopyAddress(addresses[crypto.key], crypto.label)}
-                        className="ml-2 text-xs bg-gradient-to-r from-blue-500 to-purple-600 text-white px-2 py-1 rounded-lg hover:shadow-lg transition-all duration-200"
-                      >
-                        Copy
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Input Field */}
-                <div className="space-y-3">
-                  <input
-                    type="text"
-                    value={editing[crypto.key] || ''}
-                    onChange={(e) => handleEditChange(crypto.key, e.target.value)}
-                    placeholder={crypto.placeholder}
-                    disabled={isSaving !== null && isSaving !== crypto.key}
-                    className="w-full rounded-xl border border-gray-300 bg-white/80 px-4 py-3 focus:border-transparent focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all duration-200 shadow-lg"
-                  />
-
-                  {!isBulkEditing && (
-                    <div className="flex justify-between items-center">
-                      <button
-                        onClick={() => handleEditChange(crypto.key, '')}
-                        disabled={!editing[crypto.key]}
-                        className="text-sm text-gray-500 hover:text-gray-700 disabled:opacity-50 transition-colors duration-200"
-                      >
-                        🗑️ Clear
-                      </button>
-                      
-                      <button
-                        onClick={() => handleSave(crypto.key)}
-                        disabled={
-                          isSaving !== null || 
-                          !hasChanges(crypto.key)
-                        }
-                        className="inline-flex items-center rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 px-4 py-2 text-sm font-medium text-white hover:from-emerald-600 hover:to-teal-700 disabled:opacity-50 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105"
-                      >
-                        {isSaving === crypto.key ? (
-                          <>
-                            <div className="mr-2 h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
-                            Saving...
-                          </>
-                        ) : (
-                          '💾 Save'
-                        )}
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </motion.div>
-          ))}
-        </div>
-
-        {/* Bulk Edit Notice */}
+        {/* Bulk Edit Actions */}
         {isBulkEditing && (
           <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="rounded-2xl bg-gradient-to-r from-blue-500 to-purple-600 p-6 text-white shadow-xl"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-gradient-to-r from-blue-500 to-indigo-600 rounded-2xl p-6 text-white shadow-lg mb-8"
           >
-            <div className="flex items-start">
-              <span className="text-2xl mr-4">💡</span>
-              <div>
-                <h3 className="text-lg font-bold mb-2">Bulk Edit Mode Active</h3>
-                <p className="opacity-90">
-                  You&apos;re editing all wallet addresses simultaneously. Make your changes above and click &apos;Save All Changes&apos; when ready.
-                </p>
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+              <div className="flex items-center">
+                <FiEdit className="mr-3 text-xl" />
+                <div>
+                  <h3 className="text-lg font-semibold">Bulk Edit Mode Active</h3>
+                  <p className="text-blue-100 text-sm">
+                    You&apos;re editing all wallet addresses simultaneously. Make your changes and save all at once.
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setIsBulkEditing(false)}
+                  className="px-4 py-2 bg-white/20 text-white rounded-lg hover:bg-white/30 transition-colors duration-200"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleBulkSave}
+                  disabled={isSaving === 'bulk' || !hasAnyChanges()}
+                  className="inline-flex items-center px-6 py-2 bg-white text-blue-600 font-semibold rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors duration-200"
+                >
+                  {isSaving === 'bulk' ? (
+                    <motion.div
+                      animate={{ rotate: 360 }}
+                      transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                      className="flex items-center"
+                    >
+                      <FiRefreshCw className="mr-2" />
+                      Saving...
+                    </motion.div>
+                  ) : (
+                    <>
+                      <FiSave className="mr-2" />
+                      Save All Changes
+                    </>
+                  )}
+                </button>
               </div>
             </div>
           </motion.div>
         )}
+
+        {/* Crypto Addresses Grid */}
+        <motion.div
+          initial="hidden"
+          animate="visible"
+          variants={{
+            visible: {
+              transition: {
+                staggerChildren: 0.1
+              }
+            }
+          }}
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-8"
+        >
+          {CRYPTO_TYPES.map((crypto) => {
+            const address = addresses[crypto.key]
+            const isCopied = copiedAddress === address
+            const cardVariants = {
+              hidden: { opacity: 0, y: 20 },
+              visible: { opacity: 1, y: 0 }
+            }
+
+            return (
+              <motion.div
+                key={crypto.key}
+                variants={cardVariants}
+                transition={{ duration: 0.3, type: "spring", stiffness: 100 }}
+                className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all duration-300 hover:translate-y-[-2px]"
+              >
+                <div className="p-6">
+                  {/* Header */}
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center space-x-4">
+                      <div className={`flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-r ${crypto.gradient} text-white text-lg font-bold shadow-sm`}>
+                        {crypto.icon}
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-gray-900">{crypto.label}</h3>
+                        <p className="text-sm text-gray-500">{crypto.description}</p>
+                      </div>
+                    </div>
+
+                    {!isBulkEditing && address && (
+                      <span className="inline-flex items-center rounded-full bg-emerald-100 text-emerald-800 px-3 py-1 text-xs font-medium">
+                        Configured
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Address Display */}
+                  {address && !isBulkEditing && (
+                    <div className="mb-4 bg-gray-50 rounded-lg border border-gray-200 p-4">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm text-gray-600 font-mono truncate flex-1">
+                          {address}
+                        </p>
+                        <button
+                          onClick={() => handleCopyAddress(address, crypto.label)}
+                          className="ml-3 flex-shrink-0 inline-flex items-center justify-center w-8 h-8 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200"
+                          aria-label="Copy address"
+                        >
+                          <AnimatePresence mode="wait" initial={false}>
+                            {isCopied ? (
+                              <motion.span
+                                key="check"
+                                initial={{ opacity: 0, scale: 0.8 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                exit={{ opacity: 0, scale: 0.8 }}
+                              >
+                                <FiCheck className="h-4 w-4" />
+                              </motion.span>
+                            ) : (
+                              <motion.span
+                                key="copy"
+                                initial={{ opacity: 0, scale: 0.8 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                exit={{ opacity: 0, scale: 0.8 }}
+                              >
+                                <FiCopy className="h-4 w-4" />
+                              </motion.span>
+                            )}
+                          </AnimatePresence>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Input Field */}
+                  <div className="space-y-3">
+                    <input
+                      type="text"
+                      value={editing[crypto.key] || ''}
+                      onChange={(e) => handleEditChange(crypto.key, e.target.value)}
+                      placeholder={crypto.placeholder}
+                      disabled={isSaving !== null && isSaving !== crypto.key}
+                      className="w-full rounded-lg border border-gray-300 bg-gray-50/50 px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                    />
+
+                    {!isBulkEditing && (
+                      <div className="flex justify-between items-center">
+                        <button
+                          onClick={() => handleEditChange(crypto.key, '')}
+                          disabled={!editing[crypto.key]}
+                          className="inline-flex items-center text-sm text-gray-500 hover:text-gray-700 disabled:opacity-50 transition-colors duration-200"
+                        >
+                          <FiTrash2 className="mr-1" />
+                          Clear
+                        </button>
+                        
+                        <button
+                          onClick={() => handleSave(crypto.key)}
+                          disabled={isSaving !== null || !hasChanges(crypto.key)}
+                          className="inline-flex items-center px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors duration-200"
+                        >
+                          {isSaving === crypto.key ? (
+                            <motion.div
+                              animate={{ rotate: 360 }}
+                              transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                              className="flex items-center"
+                            >
+                              <FiRefreshCw className="mr-2" />
+                              Saving...
+                            </motion.div>
+                          ) : (
+                            <>
+                              <FiSave className="mr-2" />
+                              Save
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </motion.div>
+            )
+          })}
+        </motion.div>
 
         {/* Security Notice */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="rounded-2xl bg-gradient-to-r from-green-300 to-green-800 p-6 text-white shadow-xl"
+          className="bg-gradient-to-r from-blue-400 to-blue-600 rounded-2xl p-6 text-white shadow-lg"
         >
           <div className="flex items-start">
-            <span className="text-2xl mr-4">🔒</span>
+            <FiShield className="mr-4 text-xl mt-1 flex-shrink-0" />
             <div>
-              <h3 className="text-lg font-bold mb-2">Security First</h3>
-              <p className="opacity-90">
+              <h3 className="text-lg font-semibold mb-2">Security First</h3>
+              <p className="text-emerald-100 text-sm">
                 Always double-check wallet addresses before saving. Cryptocurrency transactions are irreversible. 
                 Keep your private keys secure and never share them with anyone.
               </p>
