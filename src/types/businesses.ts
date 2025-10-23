@@ -31,40 +31,45 @@ export const businesses = [
 
 
 
-export  type CryptoType = 'BTC' | 'ETH' | 'BNB' | 'DOGE' | 'SOL' | 'USDT';
-
-export type DepositInput = {
-  planId: number;
+ 
+export interface DepositInput {
+  planId: string; // Changed from number to string to match UUID
   amount: number;
-  cryptoType: CryptoType;
+  cryptoType: string; // Changed from CryptoType to string
   transactionHash?: string;
-};
+}
 
-export  type InvestmentPlan = {
-  id: number;
+ export interface InvestmentPlan {
+  id: string; // Changed from number to string to match UUID
   title: string;
-  percentage: number;
-  minAmount: number;
-  maxAmount: number;
-  durationDays: number;
-  interval: string;
-  referralBonus: number;
-};
+  description: string;
+  min_amount: number; // Changed from minAmount to match server
+  max_amount: number | null; // Changed from maxAmount to match server
+  daily_profit_percentage: number; // Changed from percentage to match server
+  duration_days: number; // Changed from durationDays to match server
+  total_return_percentage: number;
+  features: string[];
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
 
-export  type CryptoPaymentOption = {
-  id: number;
+export interface CryptoPaymentOption {
+  id: string; // Changed from number to string to match UUID
   name: string;
   symbol: string;
   network: string;
   walletAddress: string;
-};
+}
 
-export  type DepositStatus = 'pending' | 'completed' | 'rejected';
+export type DepositStatus = 'pending' | 'confirmed' | 'completed' | 'failed' | 'cancelled';
 
-export  type Deposit = {
+export type CryptoType = 'BTC' | 'ETH' | 'BNB' | 'DOGE' | 'SOL' | 'USDT' | 'XRP' | 'LTC';
+
+export interface Deposit {
   id: string;
   amount: number;
-  cryptoType: CryptoType;
+  cryptoType: string; // Changed from CryptoType to string for flexibility
   status: DepositStatus;
   reference: string;
   createdAt: string;
@@ -74,11 +79,17 @@ export  type Deposit = {
   planTitle?: string;
   userEmail?: string;
   username?: string;
-};
+}
 
 
 // Withdrawal status types
-export type WithdrawalStatus = 'pending' | 'processing' | 'completed' | 'rejected';
+export type WithdrawalStatus =
+  | "pending"
+  | "processing"
+  | "rejected"
+  | "completed"
+  | "cancelled";
+
 
 // Input for initiating a withdrawal
 export interface WithdrawalInput {
@@ -99,7 +110,8 @@ export interface Withdrawal {
   processedAt?: string;
   adminNotes?: string;
   userEmail?: string;       // Only for admin views
-  username?: string;        // Only for admin views
+  username?: string;   
+  name?: string;     // Only for admin views
 }
 
 export type ProfileData = {
@@ -111,16 +123,18 @@ export type ProfileData = {
   balance: number;
 };
 
-export type UpdateInvestmentPlanInput = {
-  id: number;
+export interface UpdateInvestmentPlanInput {
+  id: string;
   title?: string;
-  percentage?: number;
+  description?: string;
   min_amount?: number;
-  max_amount?: number;
+  max_amount?: number | null;
+  daily_profit_percentage?: number;
   duration_days?: number;
-  interval?: string;
-  referral_bonus?: number;
-};
+  total_return_percentage?: number;
+  features?: string[];
+  is_active?: boolean;
+}
 
 export interface UpdateUserProfileInput {
   id: string;

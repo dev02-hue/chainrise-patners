@@ -1,10 +1,25 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import { getUserDeposits } from '@/lib/investmentplan';
 import { Deposit } from '@/types/businesses';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence, Variants } from 'framer-motion';
 import React, { useEffect, useState } from 'react';
-import { FaBitcoin, FaDog, FaEthereum, FaHistory, FaWallet, FaSpinner } from 'react-icons/fa';
+import { 
+  FaBitcoin, 
+  FaDog, 
+  FaEthereum, 
+ 
+  FaWallet, 
+ 
+  FaFilter,
+  FaSearch,
+  FaSort,
+  FaCalendarAlt,
+  FaCheckCircle,
+  FaClock,
+  FaTimesCircle
+} from 'react-icons/fa';
 import { SiBinance, SiLitecoin, SiRipple, SiSolana, SiTether } from 'react-icons/si';
 
 const DepositHistoryPage = () => {
@@ -16,6 +31,44 @@ const DepositHistoryPage = () => {
     deposits: ''
   });
   const [deposits, setDeposits] = useState<Deposit[]>([]);
+  const [filteredDeposits, setFilteredDeposits] = useState<Deposit[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [sortBy, setSortBy] = useState<'date' | 'amount'>('date');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+
+  // Animation variants
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.1
+      }
+    }
+  };
+
+ 
+
+  const cardVariants: Variants = {
+    hidden: { scale: 0.9, opacity: 0 },
+    visible: {
+      scale: 1,
+      opacity: 1,
+      transition: {
+        type: "spring" as any,
+        stiffness: 300,
+        damping: 25
+      }
+    },
+    exit: {
+      scale: 0.9,
+      opacity: 0,
+      transition: {
+        duration: 0.2
+      }
+    }
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -25,6 +78,7 @@ const DepositHistoryPage = () => {
         if (depositsError) throw new Error(depositsError);
         
         setDeposits(depositsData || []);
+        setFilteredDeposits(depositsData || []);
       } catch (err) {
         setError({
           deposits: err instanceof Error ? err.message : "Failed to load deposits"
@@ -39,87 +93,339 @@ const DepositHistoryPage = () => {
     fetchData();
   }, []);
 
+  // Filter and sort deposits
+  useEffect(() => {
+    let result = [...deposits];
+
+    // Apply search filter
+    if (searchTerm) {
+      result = result.filter(deposit =>
+        deposit.cryptoType.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        deposit.amount.toString().includes(searchTerm) ||
+        deposit.status.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+
+    // Apply status filter
+    if (statusFilter !== 'all') {
+      result = result.filter(deposit => deposit.status === statusFilter);
+    }
+
+    // Apply sorting
+    result.sort((a, b) => {
+      if (sortBy === 'date') {
+        return sortOrder === 'desc' 
+          ? new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          : new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      } else {
+        return sortOrder === 'desc' ? b.amount - a.amount : a.amount - b.amount;
+      }
+    });
+
+    setFilteredDeposits(result);
+  }, [deposits, searchTerm, statusFilter, sortBy, sortOrder]);
+
   const getCryptoIcon = (symbol: string) => {
-    switch (symbol) {
-      case 'BTC': return <FaBitcoin className="text-yellow-500" />;
-      case 'ETH': return <FaEthereum className="text-purple-500" />;
-      case 'BNB': return <SiBinance className="text-yellow-600" />;
-      case 'DOGE': return <FaDog className="text-orange-400" />;
-      case 'SOL': return <SiSolana className="text-indigo-500" />;
-      case 'USDT': return <SiTether className="text-green-500" />;
-      case 'XRP': return <SiRipple className="text-blue-500" />;
-      case 'LTC': return <SiLitecoin className="text-gray-400" />;
-      default: return <FaWallet className="text-gray-500" />;
+    const iconClass = "text-2xl";
+    switch (symbol.toUpperCase()) {
+      case 'BTC': return <FaBitcoin className={`${iconClass} text-orange-500`} />;
+      case 'ETH': return <FaEthereum className={`${iconClass} text-gray-400`} />;
+      case 'BNB': return <SiBinance className={`${iconClass} text-yellow-500`} />;
+      case 'DOGE': return <FaDog className={`${iconClass} text-orange-400`} />;
+      case 'SOL': return <SiSolana className={`${iconClass} text-purple-500`} />;
+      case 'USDT': return <SiTether className={`${iconClass} text-green-500`} />;
+      case 'XRP': return <SiRipple className={`${iconClass} text-blue-500`} />;
+      case 'LTC': return <SiLitecoin className={`${iconClass} text-blue-400`} />;
+      default: return <FaWallet className={`${iconClass} text-gray-500`} />;
+    }
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'completed':
+        return <FaCheckCircle className="text-emerald-500" />;
+      case 'confirmed':
+        return <FaCheckCircle className="text-blue-500" />;
+      case 'pending':
+        return <FaClock className="text-amber-500" />;
+      case 'cancelled':
+      case 'failed':
+        return <FaTimesCircle className="text-red-500" />;
+      default:
+        return <FaClock className="text-gray-500" />;
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'completed':
+        return 'bg-emerald-100 text-emerald-800 border-emerald-200';
+      case 'confirmed':
+        return 'bg-blue-100 text-blue-800 border-blue-200';
+      case 'pending':
+        return 'bg-amber-100 text-amber-800 border-amber-200';
+      case 'cancelled':
+        return 'bg-red-100 text-red-800 border-red-200';
+      case 'failed':
+        return 'bg-red-100 text-red-800 border-red-200';
+      default:
+        return 'bg-gray-100 text-gray-800 border-gray-200';
+    }
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  const toggleSort = (type: 'date' | 'amount') => {
+    if (sortBy === type) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortBy(type);
+      setSortOrder('desc');
     }
   };
 
   return (
-    <div>
-      <h2 className="text-xl sm:text-2xl font-semibold mb-4 sm:mb-6">Your Deposit History</h2>
-      {loading.deposits ? (
-        <div className="flex justify-center items-center h-64">
-          <FaSpinner className="animate-spin text-4xl text-green-500" />
-        </div>
-      ) : error.deposits ? (
-        <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6">
-          <p>{error.deposits}</p>
-        </div>
-      ) : deposits.length === 0 ? (
-        <div className="text-center py-12">
-          <FaHistory className="mx-auto text-4xl text-gray-400 mb-4" />
-          <p className="text-gray-500">No deposit history found</p>
-        </div>
-      ) : (
-        <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
-          <table className="min-w-full divide-y divide-gray-200 ">
-            <thead className="bg-gray-50  ">
-              <tr>
-                <th className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-black uppercase tracking-wider">Amount</th>
-                <th className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-black uppercase tracking-wider">Method</th>
-                <th className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-black uppercase tracking-wider">Status</th>
-                <th className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-black uppercase tracking-wider">Date</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white   divide-y divide-gray-200 ">
-              {deposits.map((deposit) => (
-                <motion.tr
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-blue-900 py-8 px-4">
+      <div className="max-w-6xl mx-auto">
+        {/* Header */}
+        <motion.div
+          initial={{ opacity: 0, y: -30 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="text-center mb-12"
+        >
+          <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-4">
+            Deposit History
+          </h1>
+          <p className="text-lg text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
+            Track and manage all your investment deposits in one place
+          </p>
+        </motion.div>
+
+        {/* Stats Overview */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8"
+        >
+          <div className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-2xl p-6 border border-gray-200 dark:border-slate-700 shadow-lg">
+            <div className="text-2xl font-bold text-gray-800 dark:text-white mb-1">
+              {deposits.length}
+            </div>
+            <div className="text-sm text-gray-600 dark:text-gray-400">Total Deposits</div>
+          </div>
+          <div className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-2xl p-6 border border-gray-200 dark:border-slate-700 shadow-lg">
+            <div className="text-2xl font-bold text-emerald-500 mb-1">
+              {deposits.filter(d => d.status === 'completed').length}
+            </div>
+            <div className="text-sm text-gray-600 dark:text-gray-400">Completed</div>
+          </div>
+          <div className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-2xl p-6 border border-gray-200 dark:border-slate-700 shadow-lg">
+            <div className="text-2xl font-bold text-amber-500 mb-1">
+              {deposits.filter(d => d.status === 'pending').length}
+            </div>
+            <div className="text-sm text-gray-600 dark:text-gray-400">Pending</div>
+          </div>
+          <div className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-2xl p-6 border border-gray-200 dark:border-slate-700 shadow-lg">
+            <div className="text-2xl font-bold text-blue-500 mb-1">
+              ${deposits.reduce((sum, deposit) => sum + deposit.amount, 0).toFixed(2)}
+            </div>
+            <div className="text-sm text-gray-600 dark:text-gray-400">Total Invested</div>
+          </div>
+        </motion.div>
+
+        {/* Filters and Search */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm rounded-2xl p-6 mb-8 border border-gray-200 dark:border-slate-700 shadow-lg"
+        >
+          <div className="flex flex-col lg:flex-row gap-4 items-center justify-between">
+            {/* Search */}
+            <div className="relative flex-1 w-full">
+              <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search by crypto, amount, or status..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-300"
+              />
+            </div>
+
+            {/* Status Filter */}
+            <div className="flex items-center space-x-2">
+              <FaFilter className="text-gray-400" />
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="px-4 py-3 bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-300"
+              >
+                <option value="all">All Status</option>
+                <option value="pending">Pending</option>
+                <option value="confirmed">Confirmed</option>
+                <option value="completed">Completed</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+            </div>
+
+            {/* Sort Options */}
+            <div className="flex space-x-2">
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => toggleSort('date')}
+                className={`px-4 py-3 rounded-xl border transition-all duration-300 flex items-center space-x-2 ${
+                  sortBy === 'date'
+                    ? 'bg-blue-500 text-white border-blue-500'
+                    : 'bg-gray-50 dark:bg-slate-700 border-gray-200 dark:border-slate-600 text-gray-700 dark:text-gray-300'
+                }`}
+              >
+                <FaCalendarAlt />
+                <span>Date</span>
+                <FaSort className={`text-xs ${sortOrder === 'desc' ? 'transform rotate-180' : ''}`} />
+              </motion.button>
+              
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => toggleSort('amount')}
+                className={`px-4 py-3 rounded-xl border transition-all duration-300 flex items-center space-x-2 ${
+                  sortBy === 'amount'
+                    ? 'bg-blue-500 text-white border-blue-500'
+                    : 'bg-gray-50 dark:bg-slate-700 border-gray-200 dark:border-slate-600 text-gray-700 dark:text-gray-300'
+                }`}
+              >
+                <span>Amount</span>
+                <FaSort className={`text-xs ${sortOrder === 'desc' ? 'transform rotate-180' : ''}`} />
+              </motion.button>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Deposits List */}
+        <motion.div
+          variants={containerVariants}
+          initial="hidden"
+          animate="visible"
+          className="space-y-4"
+        >
+          {loading.deposits ? (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="flex justify-center items-center h-64"
+            >
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full"
+              />
+            </motion.div>
+          ) : error.deposits ? (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl p-8 text-center"
+            >
+              <div className="text-red-500 text-4xl mb-4">⚠️</div>
+              <h3 className="text-lg font-semibold text-red-700 dark:text-red-300 mb-2">
+                Unable to Load Deposits
+              </h3>
+              <p className="text-red-600 dark:text-red-400">{error.deposits}</p>
+            </motion.div>
+          ) : filteredDeposits.length === 0 ? (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="text-center py-16 bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm rounded-2xl border border-gray-200 dark:border-slate-700"
+            >
+              <div className="text-6xl mb-4">📊</div>
+              <h3 className="text-xl font-semibold text-gray-600 dark:text-gray-400 mb-2">
+                {searchTerm || statusFilter !== 'all' ? 'No matching transactions' : 'No transactions yet'}
+              </h3>
+              <p className="text-gray-500 dark:text-gray-500 max-w-md mx-auto">
+                {searchTerm || statusFilter !== 'all' 
+                  ? 'Try adjusting your search or filter criteria'
+                  : 'Start your investment journey by making your first deposit'
+                }
+              </p>
+            </motion.div>
+          ) : (
+            <AnimatePresence>
+              {filteredDeposits.map((deposit ) => (
+                <motion.div
                   key={deposit.id}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ duration: 0.3 }}
-                  className="hover:bg-gray-50  "
+                  variants={cardVariants}
+                  initial="hidden"
+                  animate="visible"
+                  exit="exit"
+                  layout
+                  className="bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm rounded-2xl p-6 border border-gray-200 dark:border-slate-700 shadow-lg hover:shadow-xl transition-all duration-300"
                 >
-                  <td className="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap">
-                    <div className="text-sm sm:text-base">${deposit.amount.toFixed(2)}</div>
-                  </td>
-                  <td className="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap">
-                    <div className="flex items-center">
-                      <div className="flex-shrink-0 mr-1 sm:mr-2">
+                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                    {/* Left Section - Crypto and Amount */}
+                    <div className="flex items-center space-x-4">
+                      <div className="p-3 bg-gradient-to-br from-blue-100 to-purple-100 dark:from-blue-900/20 dark:to-purple-900/20 rounded-xl">
                         {getCryptoIcon(deposit.cryptoType)}
                       </div>
-                      <span className="text-sm sm:text-base">{deposit.cryptoType}</span>
+                      <div>
+                        <h3 className="text-lg font-semibold text-gray-800 dark:text-white">
+                          ${deposit.amount.toFixed(2)}
+                        </h3>
+                        <p className="text-sm text-gray-600 dark:text-gray-400 capitalize">
+                          {deposit.cryptoType} • {deposit.planTitle || 'Investment Plan'}
+                        </p>
+                      </div>
                     </div>
-                  </td>
-                  <td className="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap">
-                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                      deposit.status === 'completed' ? 'bg-green-100 text-green-800' :
-                      deposit.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                      'bg-red-100 text-red-800'
-                    }`}>
-                      {deposit.status}
-                    </span>
-                  </td>
-                  <td className="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap">
-                    <div className="text-xs sm:text-sm text-gray-500">
-                      {new Date(deposit.createdAt).toLocaleDateString()}
+
+                    {/* Middle Section - Status */}
+                    <div className="flex items-center space-x-3">
+                      <div className="text-2xl">
+                        {getStatusIcon(deposit.status)}
+                      </div>
+                      <div className="text-right">
+                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${getStatusColor(deposit.status)}`}>
+                          {deposit.status.charAt(0).toUpperCase() + deposit.status.slice(1)}
+                        </span>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                          {formatDate(deposit.createdAt)}
+                        </p>
+                      </div>
                     </div>
-                  </td>
-                </motion.tr>
+
+                    {/* Right Section - Date (Mobile) */}
+                    <div className="lg:hidden flex items-center space-x-2 text-sm text-gray-500 dark:text-gray-400">
+                      <FaCalendarAlt />
+                      <span>{new Date(deposit.createdAt).toLocaleDateString()}</span>
+                    </div>
+                  </div>
+                </motion.div>
               ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+            </AnimatePresence>
+          )}
+        </motion.div>
+
+        {/* Results Count */}
+        {!loading.deposits && filteredDeposits.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="text-center mt-8 text-gray-500 dark:text-gray-400"
+          >
+            Showing {filteredDeposits.length} of {deposits.length} transactions
+          </motion.div>
+        )}
+      </div>
     </div>
   );
 };

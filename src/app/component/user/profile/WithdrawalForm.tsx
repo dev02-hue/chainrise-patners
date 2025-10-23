@@ -3,7 +3,8 @@ import { useState } from 'react';
 import { initiateWithdrawal } from '@/lib/withdrawal';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { FiArrowRight, FiAlertCircle, FiCheckCircle, FiInfo, FiLoader } from 'react-icons/fi';
+import { FiArrowRight, FiAlertCircle, FiCheckCircle, FiInfo, FiLoader, FiDollarSign, } from 'react-icons/fi';
+import { FaWallet } from 'react-icons/fa';
 
 type FormData = {
   amount: string;
@@ -12,10 +13,10 @@ type FormData = {
 };
 
 const cryptoOptions = [
-  { value: 'USDT', label: 'USDT (Tether)', icon: '💲' },
-  { value: 'BTC', label: 'Bitcoin (BTC)', icon: '₿' },
-  { value: 'ETH', label: 'Ethereum (ETH)', icon: 'Ξ' },
-  { value: 'BNB', label: 'BNB', icon: '🅱' },
+  { value: 'USDT', label: 'USDT', icon: '💲', color: 'bg-emerald-50 text-emerald-600 border-emerald-200' },
+  { value: 'BTC', label: 'BTC', icon: '₿', color: 'bg-amber-50 text-amber-600 border-amber-200' },
+  { value: 'ETH', label: 'ETH', icon: 'Ξ', color: 'bg-blue-50 text-blue-600 border-blue-200' },
+  { value: 'BNB', label: 'BNB', icon: '🅱', color: 'bg-yellow-50 text-yellow-600 border-yellow-200' },
 ];
 
 export default function WithdrawalForm() {
@@ -29,11 +30,18 @@ export default function WithdrawalForm() {
     walletAddress: ''
   });
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
       [name]: value
+    }));
+  };
+
+  const handleCryptoSelect = (cryptoType: string) => {
+    setFormData(prev => ({
+      ...prev,
+      cryptoType
     }));
   };
 
@@ -83,25 +91,32 @@ export default function WithdrawalForm() {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
-      className="max-w-md mx-auto bg-white rounded-xl shadow-lg overflow-hidden border border-gray-100"
+      className="max-w-lg mx-auto bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden"
     >
-      <div className="p-8">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-2xl font-bold text-gray-800">Withdraw Funds</h2>
-          <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center">
-            <FiArrowRight className="text-blue-600 text-xl" />
+      {/* Header */}
+      <div className="bg-gradient-to-r from-blue-50 to-emerald-50 px-8 py-6 border-b border-gray-100">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-800 mb-1">Withdraw Funds</h2>
+            <p className="text-gray-600 text-sm">Transfer cryptocurrency to your external wallet</p>
+          </div>
+          <div className="w-12 h-12 rounded-xl bg-white shadow-sm flex items-center justify-center">
+            <FiArrowRight className="text-blue-500 text-xl" />
           </div>
         </div>
-        
+      </div>
+
+      <div className="p-8">
+        {/* Status Messages */}
         {error && (
           <motion.div 
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
-            className="mb-6 p-4 bg-red-50 text-red-700 rounded-lg flex items-start gap-3"
+            className="mb-6 p-4 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl flex items-start gap-3"
           >
-            <FiAlertCircle className="text-red-500 text-xl mt-0.5 flex-shrink-0" />
+            <FiAlertCircle className="text-rose-500 text-xl mt-0.5 flex-shrink-0" />
             <div>
-              <p className="font-medium">Error</p>
+              <p className="font-medium">Withdrawal Error</p>
               <p className="text-sm">{error}</p>
             </div>
           </motion.div>
@@ -111,130 +126,167 @@ export default function WithdrawalForm() {
           <motion.div 
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
-            className="mb-6 p-4 bg-green-50 text-green-700 rounded-lg flex items-start gap-3"
+            className="mb-6 p-4 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl flex items-start gap-3"
           >
-            <FiCheckCircle className="text-green-500 text-xl mt-0.5 flex-shrink-0" />
+            <FiCheckCircle className="text-emerald-500 text-xl mt-0.5 flex-shrink-0" />
             <div>
-              <p className="font-medium">Success!</p>
-              <p className="text-sm">Withdrawal request submitted successfully.</p>
+              <p className="font-medium">Withdrawal Request Submitted</p>
+              <p className="text-sm">Your transaction is being processed.</p>
             </div>
           </motion.div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Amount Input */}
           <div>
-            <label htmlFor="amount" className="block text-sm font-medium text-gray-700 mb-2">
-              Amount (USD)
+            <label htmlFor="amount" className="block text-sm font-semibold text-gray-700 mb-3">
+              Withdrawal Amount
             </label>
             <div className="relative">
+              <div className="absolute left-4 top-3.5 text-gray-400">
+                <FiDollarSign className="w-5 h-5" />
+              </div>
               <input
                 type="number"
                 id="amount"
                 name="amount"
                 value={formData.amount}
                 onChange={handleChange}
-                className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
                 placeholder="0.00"
                 step="0.01"
                 min="10"
                 required
               />
-              <span className="absolute right-4 top-3.5 text-gray-400">USD</span>
+              <span className="absolute right-4 top-3.5 text-gray-500 text-sm font-medium">USD</span>
             </div>
-            <p className="text-xs text-gray-500 mt-2">Minimum withdrawal: $10.00</p>
+            <p className="text-xs text-gray-500 mt-2 flex items-center gap-1">
+              <FiInfo className="w-3 h-3" />
+              Minimum withdrawal amount: $10.00
+            </p>
           </div>
 
+          {/* Cryptocurrency Selection */}
           <div>
-            <label htmlFor="cryptoType" className="block text-sm font-medium text-gray-700 mb-2">
-              Cryptocurrency
+            <label className="block text-sm font-semibold text-gray-700 mb-3">
+              Select Cryptocurrency
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              {cryptoOptions.map((option) => (
+                <motion.button
+                  key={option.value}
+                  type="button"
+                  onClick={() => handleCryptoSelect(option.value)}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  className={`p-4 rounded-xl border-2 transition-all duration-200 flex flex-col items-center gap-2 ${
+                    formData.cryptoType === option.value
+                      ? `${option.color} border-current shadow-sm`
+                      : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
+                  }`}
+                >
+                  <span className="text-2xl">{option.icon}</span>
+                  <span className="font-medium text-sm">{option.label}</span>
+                </motion.button>
+              ))}
+            </div>
+          </div>
+
+          {/* Wallet Address */}
+          <div>
+            <label htmlFor="walletAddress" className="block text-sm font-semibold text-gray-700 mb-3">
+              Destination Wallet Address
             </label>
             <div className="relative">
-              <select
-                id="cryptoType"
-                name="cryptoType"
-                value={formData.cryptoType}
-                onChange={handleChange}
-                className="w-full px-4 py-3 border border-gray-200 rounded-lg appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                required
-              >
-                {cryptoOptions.map(option => (
-                  <option key={option.value} value={option.value}>
-                    {option.icon} {option.label}
-                  </option>
-                ))}
-              </select>
-              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400">
-                <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-                </svg>
+              <div className="absolute left-4 top-3.5 text-gray-400">
+                <FaWallet className="w-5 h-5" />
               </div>
+              <input
+                type="text"
+                id="walletAddress"
+                name="walletAddress"
+                value={formData.walletAddress}
+                onChange={handleChange}
+                className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
+                placeholder="Enter your external wallet address"
+                required
+              />
             </div>
           </div>
 
-          <div>
-            <label htmlFor="walletAddress" className="block text-sm font-medium text-gray-700 mb-2">
-              Wallet Address
-            </label>
-            <input
-              type="text"
-              id="walletAddress"
-              name="walletAddress"
-              value={formData.walletAddress}
-              onChange={handleChange}
-              className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Enter your wallet address"
-              required
-            />
-          </div>
-
+          {/* Submit Button */}
           <motion.button
             type="submit"
             disabled={isLoading}
+            whileHover={{ scale: isLoading ? 1 : 1.02 }}
             whileTap={{ scale: isLoading ? 1 : 0.98 }}
-            className={`w-full py-3 px-6 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
+            className={`w-full py-4 px-6 rounded-xl font-semibold transition-all duration-200 flex items-center justify-center gap-3 ${
               isLoading 
-                ? 'bg-blue-400 cursor-not-allowed' 
-                : 'bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white shadow-md'
+                ? 'bg-blue-400 cursor-not-allowed shadow-sm' 
+                : 'bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white shadow-md hover:shadow-lg'
             }`}
           >
             {isLoading ? (
               <>
-                <FiLoader className="animate-spin" />
-                Processing...
+                <FiLoader className="animate-spin w-5 h-5" />
+                Processing Withdrawal...
               </>
             ) : (
               <>
-                Withdraw
-                <FiArrowRight />
+                <span>Initiate Withdrawal</span>
+                <FiArrowRight className="w-5 h-5" />
               </>
             )}
           </motion.button>
         </form>
       </div>
 
+      {/* Information Panel */}
       <div className="bg-gray-50 px-8 py-6 border-t border-gray-100">
-        <div className="flex items-start gap-3">
-          <FiInfo className="text-blue-500 text-xl mt-0.5 flex-shrink-0" />
+        <div className="flex items-start gap-4">
+          <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0">
+            <FiInfo className="text-blue-500 text-lg" />
+          </div>
           <div>
-            <h3 className="text-sm font-medium text-gray-700 mb-2">Withdrawal Information</h3>
-            <ul className="text-xs text-gray-600 space-y-2">
-              <li className="flex items-start gap-2">
-                <span className="text-blue-500">•</span>
-                <span>Processing time: 2hours max</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-blue-500">•</span>
-                <span>Network fees may apply (varies by cryptocurrency)</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-blue-500">•</span>
-                <span>Double-check wallet address before submitting</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-blue-500">•</span>
-                <span>Transactions cannot be reversed once processed</span>
-              </li>
-            </ul>
+            <h3 className="text-sm font-semibold text-gray-700 mb-3">Withdrawal Guidelines</h3>
+            <div className="space-y-3">
+              <div className="flex items-start gap-3">
+                <div className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <span className="text-blue-500 text-xs font-bold">1</span>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-700">Processing Time</p>
+                  <p className="text-xs text-gray-600">Typically processed within 2 hours during business hours</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <span className="text-blue-500 text-xs font-bold">2</span>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-700">Network Fees</p>
+                  <p className="text-xs text-gray-600">Blockchain network fees apply and vary by cryptocurrency</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <span className="text-blue-500 text-xs font-bold">3</span>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-700">Address Verification</p>
+                  <p className="text-xs text-gray-600">Double-check wallet address accuracy before submission</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <span className="text-blue-500 text-xs font-bold">4</span>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-700">Irreversible Transactions</p>
+                  <p className="text-xs text-gray-600">Cryptocurrency transactions cannot be reversed once processed</p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>

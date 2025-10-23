@@ -3,8 +3,8 @@
 import { useState, useEffect } from "react";
  import { motion } from "framer-motion";
 import { FaCheck, FaTimes, FaSpinner, FaSync } from "react-icons/fa";
-import { approveDeposit, getAllDepositss, rejectDeposit } from "@/lib/investmentplan";
-
+import {  approveDeposit, getAllDeposits, rejectDeposit } from "@/lib/investmentplan";
+ 
 interface Deposit {
   id: string;
   amount: number;
@@ -33,7 +33,7 @@ export default function DepositManager() {
     setLoading(true);
     setError(null);
     try {
-      const { data, error } = await getAllDepositss();
+      const { data, error } = await getAllDeposits();
       if (error) {
         setError(error);
       } else if (data) {

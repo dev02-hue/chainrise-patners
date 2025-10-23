@@ -32,6 +32,10 @@ const statusConfig: Record<WithdrawalStatus, { color: string; icon: React.ReactN
   rejected: {
     color: 'bg-red-100 text-red-800',
     icon: <FiXCircle className="text-red-500" />
+  },
+  cancelled: {
+    color: 'bg-gray-100 text-gray-800',
+    icon: <FiXCircle className="text-gray-500" />
   }
 };
 
