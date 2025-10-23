@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use server";
 import { redirect } from "next/navigation";
 import { getSession } from "./auth";
@@ -7,41 +8,22 @@ import { supabase } from "./supabaseClient";
 export interface UserInvestment {
   id: string;
   userId: string;
-  planId: number;
+  planId: string;
   amount: number;
-  expectedReturn: number;
+  currentBalance: number;
+  totalEarned: number;
   startDate: string;
   endDate: string;
+  withdrawalLockUntil?: string;
   status: 'active' | 'completed' | 'cancelled';
-  nextPayoutDate?: string;
-  totalPayouts: number;
+  lastProfitCalculated?: string;
   planTitle?: string;
-  planPercentage?: number;
-}
-
-interface InvestmentPlan {
-  title: string;
-  percentage: number;
-  duration_days?: number;
-  interval_days?: number;
-}
-
-interface UserInvestmentWithPlan {
-  id: string;
-  plan_id: number;
-  amount: number;
-  expected_return: number;
-  start_date: string;
-  end_date: string;
-  status: 'active' | 'completed' | 'cancelled';
-  next_payout_date?: string;
-  total_payouts: number;
-  investment_plans: InvestmentPlan;
+  dailyProfitPercentage?: number;
 }
 
 // Create a new investment
 export async function createInvestment(
-  planId: string, // Changed from number to string to match UUID type
+  planId: string,
   amount: number
 ): Promise<{ success?: boolean; error?: string; investment?: UserInvestment }> {
   try {
@@ -51,21 +33,21 @@ export async function createInvestment(
     if (!session?.user) {
       console.log('No session found - not authenticated');
       if (typeof window !== 'undefined') {
-                window.location.href = '/signin';
-              } else {
-                redirect('/signin'); // for use in server-side functions (Next.js App Router only)
-              }
+        window.location.href = '/signin';
+      } else {
+        redirect('/signin');
+      }
       return { error: 'Not authenticated' };
     }
 
     const userId = session.user.id;
     console.log('User ID:', userId);
 
-    // Fetch investment plan with proper UUID handling
+    // Fetch investment plan
     const { data: plan, error: planError } = await supabase
-      .from('investment_plans')
+      .from('chainrise_investment_plans')
       .select('*')
-      .eq('id', planId) // Now correctly comparing UUID to UUID
+      .eq('id', planId)
       .single();
 
     if (planError || !plan) {
@@ -73,39 +55,25 @@ export async function createInvestment(
       return { error: 'Invalid investment plan' };
     }
 
-    const { min_amount, max_amount, percentage, duration_days, interval_days, title } = plan;
-
-    // Set default interval_days if not provided
-    const effectiveIntervalDays = interval_days ?? 1; // Default to daily payouts if not set
+    const { min_amount, max_amount, daily_profit_percentage, duration_days } = plan;
 
     console.log('Plan details:', {
       min_amount,
       max_amount,
-      percentage,
-      duration_days,
-      interval_days: effectiveIntervalDays
+      daily_profit_percentage,
+      duration_days
     });
 
-    // Validate plan data
-    if (typeof effectiveIntervalDays !== 'number' || effectiveIntervalDays <= 0) {
-      console.error('Invalid interval_days value:', effectiveIntervalDays);
-      return { error: 'Invalid investment plan configuration - payout interval not set' };
-    }
-
-    if (typeof duration_days !== 'number' || duration_days <= 0) {
-      console.error('Invalid duration_days value:', duration_days);
-      return { error: 'Invalid investment plan configuration - duration not set' };
-    }
-
-    if (amount < min_amount || amount > max_amount) {
+    // Validate amount range
+    if (amount < min_amount || (max_amount && amount > max_amount)) {
       console.log(`Amount ${amount} is outside plan range (${min_amount}-${max_amount})`);
       return { error: `Amount must be between $${min_amount} and $${max_amount} for this plan` };
     }
 
-    // Check user balance
+    // Check user balance and total_invested
     const { data: user, error: userError } = await supabase
-      .from('accilent_profile')
-      .select('balance')
+      .from('chainrise_profile')
+      .select('balance, total_invested')
       .eq('id', userId)
       .single();
 
@@ -120,35 +88,25 @@ export async function createInvestment(
     }
 
     const currentDate = new Date();
-    const payoutCount = Math.floor(duration_days / effectiveIntervalDays);
-    const expectedReturn = amount * (percentage / 100) * payoutCount;
-    console.log('Calculated expected return:', expectedReturn);
-
-    const calculateFutureDate = (daysToAdd: number) => {
-      const date = new Date(currentDate);
-      date.setDate(date.getDate() + daysToAdd);
-      return date;
-    };
-
-    const endDate = calculateFutureDate(duration_days);
-    const nextPayoutDate = calculateFutureDate(effectiveIntervalDays);
-
-    if (isNaN(endDate.getTime()) || isNaN(nextPayoutDate.getTime())) {
-      console.error('Invalid date calculation detected');
-      return { error: 'Invalid date calculation' };
-    }
+    const endDate = new Date(currentDate);
+    endDate.setDate(endDate.getDate() + duration_days);
+    
+    // Withdrawal lock period (2 months from start)
+    const withdrawalLockUntil = new Date(currentDate);
+    withdrawalLockUntil.setMonth(withdrawalLockUntil.getMonth() + 2);
 
     console.log('Calculated dates:', {
-      endDate,
-      nextPayoutDate,
-      endDateISO: endDate.toISOString(),
-      nextPayoutDateISO: nextPayoutDate.toISOString()
+      endDate: endDate.toISOString(),
+      withdrawalLockUntil: withdrawalLockUntil.toISOString()
     });
 
-    // Deduct amount from user balance first
+    // Start transaction: Deduct amount from user balance
     const { error: balanceUpdateError } = await supabase
-      .from('accilent_profile')
-      .update({ balance: user.balance - amount })
+      .from('chainrise_profile')
+      .update({ 
+        balance: user.balance - amount,
+        total_invested: (user.total_invested || 0) + amount
+      })
       .eq('id', userId);
 
     if (balanceUpdateError) {
@@ -158,18 +116,26 @@ export async function createInvestment(
 
     // Create investment record
     const { data: investment, error: investmentError } = await supabase
-      .from('user_investments')
+      .from('chainrise_investments')
       .insert({
         user_id: userId,
         plan_id: planId,
-        amount,
-        expected_return: expectedReturn,
+        amount: amount,
+        current_balance: amount, // Start with initial amount
+        total_earned: 0.00,
         start_date: currentDate.toISOString(),
         end_date: endDate.toISOString(),
-        next_payout_date: nextPayoutDate.toISOString(),
-        status: 'active'
+        withdrawal_lock_until: withdrawalLockUntil.toISOString(),
+        status: 'active',
+        last_profit_calculated: currentDate.toISOString()
       })
-      .select()
+      .select(`
+        *,
+        chainrise_investment_plans!inner (
+          title,
+          daily_profit_percentage
+        )
+      `)
       .single();
 
     if (investmentError) {
@@ -177,30 +143,56 @@ export async function createInvestment(
       
       // Rollback balance deduction if investment creation fails
       await supabase
-        .from('accilent_profile')
-        .update({ balance: user.balance })
+        .from('chainrise_profile')
+        .update({ 
+          balance: user.balance,
+          total_invested: user.total_invested // Rollback total_invested too
+        })
         .eq('id', userId);
       
       return { error: 'Failed to create investment' };
     }
 
+    // Record transaction
+    await supabase
+      .from('chainrise_transactions')
+      .insert({
+        user_id: userId,
+        type: 'investment',
+        amount: amount,
+        currency: 'USD',
+        description: `Investment in ${plan.title}`,
+        reference: `INV-${investment.id.slice(0, 8)}`,
+        status: 'completed',
+        metadata: {
+          plan_id: planId,
+          investment_id: investment.id,
+          plan_title: plan.title
+        }
+      });
+
     console.log('Investment created successfully:', investment);
+
+    // Type-safe extraction of nested data
+    const investmentData = investment as any;
+    const planData = investmentData.chainrise_investment_plans;
 
     return {
       success: true,
       investment: {
-        id: investment.id,
-        userId: investment.user_id,
-        planId: investment.plan_id,
-        amount: investment.amount,
-        expectedReturn: investment.expected_return,
-        startDate: investment.start_date,
-        endDate: investment.end_date,
-        status: investment.status,
-        nextPayoutDate: investment.next_payout_date,
-        totalPayouts: investment.total_payouts || 0,
-        planTitle: title,
-        planPercentage: percentage
+        id: investmentData.id,
+        userId: investmentData.user_id,
+        planId: investmentData.plan_id,
+        amount: investmentData.amount,
+        currentBalance: investmentData.current_balance,
+        totalEarned: investmentData.total_earned,
+        startDate: investmentData.start_date,
+        endDate: investmentData.end_date,
+        withdrawalLockUntil: investmentData.withdrawal_lock_until,
+        status: investmentData.status,
+        lastProfitCalculated: investmentData.last_profit_calculated,
+        planTitle: planData?.title,
+        dailyProfitPercentage: planData?.daily_profit_percentage
       }
     };
   } catch (err) {
@@ -217,7 +209,7 @@ export async function getUserInvestments(): Promise<{ data?: UserInvestment[]; e
       if (typeof window !== 'undefined') {
         window.location.href = '/signin';
       } else {
-        redirect('/signin'); // for use in server-side functions (Next.js App Router only)
+        redirect('/signin');
       }
       return { error: 'Not authenticated' };
     }
@@ -225,29 +217,24 @@ export async function getUserInvestments(): Promise<{ data?: UserInvestment[]; e
     const userId = session.user.id;
 
     const { data, error } = await supabase
-      .from('user_investments')
-      .select<`
+      .from('chainrise_investments')
+      .select(`
         id,
+        user_id,
         plan_id,
         amount,
-        expected_return,
+        current_balance,
+        total_earned,
         start_date,
         end_date,
+        withdrawal_lock_until,
         status,
-        next_payout_date,
-        total_payouts,
-        investment_plans!inner(title, percentage)
-      `, UserInvestmentWithPlan>(`
-        id,
-        plan_id,
-        amount,
-        expected_return,
-        start_date,
-        end_date,
-        status,
-        next_payout_date,
-        total_payouts,
-        investment_plans!inner(title, percentage)
+        last_profit_calculated,
+        created_at,
+        chainrise_investment_plans!inner (
+          title,
+          daily_profit_percentage
+        )
       `)
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
@@ -257,101 +244,205 @@ export async function getUserInvestments(): Promise<{ data?: UserInvestment[]; e
       return { error: 'Failed to fetch investments' };
     }
 
-    return {
-      data: data?.map(inv => ({
-        id: inv.id,
-        userId: userId,
-        planId: inv.plan_id,
-        amount: inv.amount,
-        expectedReturn: inv.expected_return,
-        startDate: inv.start_date,
-        endDate: inv.end_date,
-        status: inv.status,
-        nextPayoutDate: inv.next_payout_date,
-        totalPayouts: inv.total_payouts,
-        planTitle: inv.investment_plans.title,
-        planPercentage: inv.investment_plans.percentage
-      })) || []
-    };
+    // Type-safe mapping
+    const investments: UserInvestment[] = (data || []).map((inv: any) => ({
+      id: inv.id,
+      userId: inv.user_id,
+      planId: inv.plan_id,
+      amount: inv.amount,
+      currentBalance: inv.current_balance,
+      totalEarned: inv.total_earned,
+      startDate: inv.start_date,
+      endDate: inv.end_date,
+      withdrawalLockUntil: inv.withdrawal_lock_until,
+      status: inv.status,
+      lastProfitCalculated: inv.last_profit_calculated,
+      planTitle: inv.chainrise_investment_plans?.title,
+      dailyProfitPercentage: inv.chainrise_investment_plans?.daily_profit_percentage
+    }));
+
+    return { data: investments };
   } catch (err) {
     console.error('Unexpected error in getUserInvestments:', err);
     return { error: 'An unexpected error occurred' };
   }
 }
 
-// Get investment by ID
-export async function getInvestmentById(
-  investmentId: string
-): Promise<{ data?: UserInvestment; error?: string }> {
+// Calculate daily profits (to be called by a cron job)
+export async function calculateDailyProfits(): Promise<{ success?: boolean; error?: string }> {
+  try {
+    console.log('Starting daily profit calculation...');
+
+    // Call the PostgreSQL function to calculate profits
+    const { error } = await supabase.rpc('calculate_daily_profits');
+
+    if (error) {
+      console.error('Error calculating daily profits:', error);
+      return { error: 'Failed to calculate daily profits' };
+    }
+
+    console.log('Daily profits calculated successfully');
+    return { success: true };
+  } catch (err) {
+    console.error('Unexpected error in calculateDailyProfits:', err);
+    return { error: 'An unexpected error occurred' };
+  }
+}
+
+// Check withdrawal eligibility
+export async function checkWithdrawalEligibility(
+  investmentId?: string
+): Promise<{ 
+  canWithdraw?: boolean; 
+  availableAmount?: number; 
+  message?: string; 
+  error?: string 
+}> {
   try {
     const session = await getSession();
     if (!session?.user) {
-      if (typeof window !== 'undefined') {
-        window.location.href = '/signin';
-      } else {
-        redirect('/signin'); // for use in server-side functions (Next.js App Router only)
-      }
       return { error: 'Not authenticated' };
     }
 
     const userId = session.user.id;
 
-    const { data, error } = await supabase
-      .from('user_investments')
-      .select<`
-        id,
-        plan_id,
-        amount,
-        expected_return,
-        start_date,
-        end_date,
-        status,
-        next_payout_date,
-        total_payouts,
-        investment_plans!inner(title, percentage, duration_days, interval_days)
-      `, UserInvestmentWithPlan>(`
-        id,
-        plan_id,
-        amount,
-        expected_return,
-        start_date,
-        end_date,
-        status,
-        next_payout_date,
-        total_payouts,
-        investment_plans!inner(title, percentage, duration_days, interval_days)
-      `)
+    const { data, error } = await supabase.rpc('check_withdrawal_eligibility', {
+      user_uuid: userId,
+      investment_uuid: investmentId || null
+    });
+
+    if (error) {
+      console.error('Error checking withdrawal eligibility:', error);
+      return { error: 'Failed to check withdrawal eligibility' };
+    }
+
+    if (data && data.length > 0) {
+      return {
+        canWithdraw: data[0].can_withdraw,
+        availableAmount: data[0].available_amount,
+        message: data[0].message
+      };
+    }
+
+    return { error: 'No data returned' };
+  } catch (err) {
+    console.error('Unexpected error in checkWithdrawalEligibility:', err);
+    return { error: 'An unexpected error occurred' };
+  }
+}
+
+// Withdraw from investment
+export async function withdrawFromInvestment(
+  investmentId: string,
+  amount: number
+): Promise<{ success?: boolean; error?: string }> {
+  try {
+    const session = await getSession();
+    if (!session?.user) {
+      return { error: 'Not authenticated' };
+    }
+
+    const userId = session.user.id;
+
+    // First check eligibility
+    const eligibility = await checkWithdrawalEligibility(investmentId);
+    if (eligibility.error || !eligibility.canWithdraw) {
+      return { error: eligibility.message || 'Withdrawal not allowed' };
+    }
+
+    if (amount > (eligibility.availableAmount || 0)) {
+      return { error: 'Insufficient funds available for withdrawal' };
+    }
+
+    // Start transaction
+    const { data: investment, error: investmentError } = await supabase
+      .from('chainrise_investments')
+      .select('current_balance, plan_id')
       .eq('id', investmentId)
       .eq('user_id', userId)
       .single();
 
-    if (error) {
-      console.error('Error fetching investment:', error);
-      return { error: 'Failed to fetch investment' };
-    }
-
-    if (!data) {
+    if (investmentError || !investment) {
       return { error: 'Investment not found' };
     }
 
-    return {
-      data: {
-        id: data.id,
-        userId: userId,
-        planId: data.plan_id,
-        amount: data.amount,
-        expectedReturn: data.expected_return,
-        startDate: data.start_date,
-        endDate: data.end_date,
-        status: data.status,
-        nextPayoutDate: data.next_payout_date,
-        totalPayouts: data.total_payouts,
-        planTitle: data.investment_plans.title,
-        planPercentage: data.investment_plans.percentage
-      }
-    };
+    // Update investment balance
+    const { error: updateError } = await supabase
+      .from('chainrise_investments')
+      .update({ 
+        current_balance: investment.current_balance - amount,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', investmentId);
+
+    if (updateError) {
+      return { error: 'Failed to update investment balance' };
+    }
+
+    // Add to user balance using proper Supabase syntax
+    const { error: balanceError } = await supabase
+      .from('chainrise_profile')
+      .update({ 
+        balance: (userBalance: number) => `${userBalance} + ${amount}`,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', userId);
+
+    if (balanceError) {
+      console.error('Balance update error:', balanceError);
+      // Rollback investment update
+      await supabase
+        .from('chainrise_investments')
+        .update({ 
+          current_balance: investment.current_balance,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', investmentId);
+      
+      return { error: 'Failed to process withdrawal' };
+    }
+
+    // Record withdrawal transaction
+    await supabase
+      .from('chainrise_transactions')
+      .insert({
+        user_id: userId,
+        type: 'withdrawal',
+        amount: amount,
+        currency: 'USD',
+        description: `Withdrawal from investment`,
+        reference: `WD-${investmentId.slice(0, 8)}-${Date.now()}`,
+        status: 'completed',
+        metadata: {
+          investment_id: investmentId,
+          plan_id: investment.plan_id
+        }
+      });
+
+    return { success: true };
   } catch (err) {
-    console.error('Unexpected error in getInvestmentById:', err);
+    console.error('Unexpected error in withdrawFromInvestment:', err);
+    return { error: 'An unexpected error occurred' };
+  }
+}
+
+// Get investment plans
+export async function getInvestmentPlans(): Promise<{ data?: any[]; error?: string }> {
+  try {
+    const { data, error } = await supabase
+      .from('chainrise_investment_plans')
+      .select('*')
+      .eq('is_active', true)
+      .order('min_amount', { ascending: true });
+
+    if (error) {
+      console.error('Error fetching investment plans:', error);
+      return { error: 'Failed to fetch investment plans' };
+    }
+
+    return { data: data || [] };
+  } catch (err) {
+    console.error('Unexpected error in getInvestmentPlans:', err);
     return { error: 'An unexpected error occurred' };
   }
 }

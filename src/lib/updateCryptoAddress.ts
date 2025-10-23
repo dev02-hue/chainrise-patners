@@ -1,5 +1,6 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use server";
- import { supabase } from "./supabaseClient";
+import { supabase } from "./supabaseClient";
 import { getSession } from "./auth";
 import { redirect } from "next/navigation";
 
@@ -29,12 +30,12 @@ export async function updateCryptoAddress({
 }: CryptoAddressInput): Promise<{ success?: boolean; error?: string }> {
   try {
     // 1. Get current session
-    const { session } = await getSession();
+    const session = await getSession();
     if (!session?.user) {
       if (typeof window !== 'undefined') {
         window.location.href = '/signin';
       } else {
-        redirect('/signin'); // for use in server-side functions (Next.js App Router only)
+        redirect('/signin');
       }
       return { error: 'Not authenticated' };
     }
@@ -52,7 +53,7 @@ export async function updateCryptoAddress({
 
     // 4. Update the profile in database
     const { error } = await supabase
-      .from('accilent_profile')
+      .from('chainrise_profile')
       .update(updates)
       .eq('id', session.user.id);
 
@@ -76,12 +77,12 @@ export async function deleteCryptoAddress({
 }: DeleteCryptoAddressInput): Promise<{ success?: boolean; error?: string }> {
   try {
     // 1. Get current session
-    const { session } = await getSession();
+    const session = await getSession();
     if (!session?.user) {
       if (typeof window !== 'undefined') {
         window.location.href = '/signin';
       } else {
-        redirect('/signin'); // for use in server-side functions (Next.js App Router only)
+        redirect('/signin');
       }
       return { error: 'Not authenticated' };
     }
@@ -94,7 +95,7 @@ export async function deleteCryptoAddress({
 
     // 3. Update the profile in database
     const { error } = await supabase
-      .from('accilent_profile')
+      .from('chainrise_profile')
       .update(updates)
       .eq('id', session.user.id);
 
@@ -119,19 +120,19 @@ export async function getCryptoAddresses(): Promise<{
 }> {
   try {
     // 1. Get current session
-    const { session } = await getSession();
+    const session = await getSession();
     if (!session?.user) {
       if (typeof window !== 'undefined') {
-                window.location.href = '/signin';
-              } else {
-                redirect('/signin'); // for use in server-side functions (Next.js App Router only)
-              }
+        window.location.href = '/signin';
+      } else {
+        redirect('/signin');
+      }
       return { error: 'Not authenticated' };
     }
 
     // 2. Fetch crypto addresses
     const { data: profile, error } = await supabase
-      .from('accilent_profile')
+      .from('chainrise_profile')
       .select('btc_address, bnb_address, dodge_address, eth_address, solana_address, usdttrc20_address')
       .eq('id', session.user.id)
       .single();
@@ -158,4 +159,103 @@ export async function getCryptoAddresses(): Promise<{
   }
 }
 
+/**
+ * Gets user profile with crypto addresses
+ */
+export async function getUserProfileWithAddresses(): Promise<{
+  data?: {
+    id: string;
+    name: string;
+    email: string;
+    username: string;
+    btc_address: string | null;
+    bnb_address: string | null;
+    dodge_address: string | null;
+    eth_address: string | null;
+    solana_address: string | null;
+    usdttrc20_address: string | null;
+  };
+  error?: string;
+}> {
+  try {
+    const session = await getSession();
+    if (!session?.user) {
+      if (typeof window !== 'undefined') {
+        window.location.href = '/signin';
+      } else {
+        redirect('/signin');
+      }
+      return { error: 'Not authenticated' };
+    }
 
+    const { data: profile, error } = await supabase
+      .from('chainrise_profile')
+      .select('id, name, email, username, btc_address, bnb_address, dodge_address, eth_address, solana_address, usdttrc20_address')
+      .eq('id', session.user.id)
+      .single();
+
+    if (error || !profile) {
+      console.error('Error fetching user profile:', error);
+      return { error: 'Failed to fetch user profile' };
+    }
+
+    return { data: profile };
+  } catch (err) {
+    console.error('Unexpected error in getUserProfileWithAddresses:', err);
+    return { error: 'An unexpected error occurred' };
+  }
+}
+
+/**
+ * Bulk update multiple crypto addresses at once
+ */
+export async function updateMultipleCryptoAddresses(
+  addresses: Partial<Record<CryptoAddressType, string>>
+): Promise<{ success?: boolean; error?: string }> {
+  try {
+    const session = await getSession();
+    if (!session?.user) {
+      if (typeof window !== 'undefined') {
+        window.location.href = '/signin';
+      } else {
+        redirect('/signin');
+      }
+      return { error: 'Not authenticated' };
+    }
+
+    // Validate addresses
+    const updates: any = {
+      updated_at: new Date().toISOString(),
+    };
+
+    for (const [type, address] of Object.entries(addresses)) {
+      if (address && typeof address === 'string' && address.trim().length > 0) {
+        updates[type as CryptoAddressType] = address.trim();
+      }
+    }
+
+    if (Object.keys(updates).length <= 1) { // Only has updated_at
+      return { error: 'No valid addresses provided' };
+    }
+
+    const { error } = await supabase
+      .from('chainrise_profile')
+      .update(updates)
+      .eq('id', session.user.id);
+
+    if (error) {
+      console.error('Error updating multiple crypto addresses:', error);
+      return { error: 'Failed to update crypto addresses' };
+    }
+
+    return { success: true };
+  } catch (err) {
+    console.error('Unexpected error in updateMultipleCryptoAddresses:', err);
+    return { error: 'An unexpected error occurred' };
+  }
+}
+
+/**
+ * Validate a specific cryptocurrency address format
+ */
+ 

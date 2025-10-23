@@ -1,16 +1,82 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use server";
-import { CryptoPaymentOption, Deposit, DepositInput, DepositStatus, InvestmentPlan, UpdateInvestmentPlanInput } from "@/types/businesses";
+import { redirect } from "next/navigation";
 import { getSession } from "./auth";
 import { supabase } from "./supabaseClient";
 import nodemailer from "nodemailer";
-import { redirect } from "next/navigation";
 import { processReferralBonus } from "./referral";
- 
+
+// Types
+export interface UserInvestment {
+  id: string;
+  userId: string;
+  planId: string;
+  amount: number;
+  currentBalance: number;
+  totalEarned: number;
+  startDate: string;
+  endDate: string;
+  withdrawalLockUntil?: string;
+  status: 'active' | 'completed' | 'cancelled';
+  lastProfitCalculated?: string;
+  planTitle?: string;
+  dailyProfitPercentage?: number;
+}
+
+export interface InvestmentPlan {
+  id: string;
+  title: string;
+  description: string;
+  min_amount: number;
+  max_amount: number | null;
+  daily_profit_percentage: number;
+  duration_days: number;
+  total_return_percentage: number;
+  features: string[];
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Deposit {
+  id: string;
+  amount: number;
+  cryptoType: string;
+  status: 'pending' | 'confirmed' | 'completed' | 'failed' | 'cancelled';
+  reference: string;
+  createdAt: string;
+  processedAt?: string;
+  transactionHash?: string;
+  adminNotes?: string;
+  planTitle?: string;
+  userEmail?: string;
+  username?: string;
+}
+
+export interface CryptoPaymentOption {
+  id: string;
+  name: string;
+  symbol: string;
+  network: string;
+  walletAddress: string;
+}
+
+export interface DepositInput {
+  planId: string;
+  amount: number;
+  cryptoType: string;
+  transactionHash?: string;
+}
+
+export type DepositStatus = 'pending' | 'confirmed' | 'completed' | 'failed' | 'cancelled';
+
+// Investment Plan Functions
 export async function getInvestmentPlans(): Promise<{ data?: InvestmentPlan[]; error?: string }> {
   try {
     const { data: plans, error } = await supabase
-      .from('investment_plans')
+      .from('chainrise_investment_plans')
       .select('*')
+      .eq('is_active', true)
       .order('min_amount', { ascending: true });
 
     if (error) {
@@ -18,34 +84,22 @@ export async function getInvestmentPlans(): Promise<{ data?: InvestmentPlan[]; e
       return { error: 'Failed to fetch investment plans' };
     }
 
-    return {
-      data: plans?.map(plan => ({
-        id: plan.id,
-        title: plan.title,
-        percentage: plan.percentage,
-        minAmount: plan.min_amount,
-        maxAmount: plan.max_amount,
-        durationDays: plan.duration_days,
-        interval: plan.interval,
-        referralBonus: plan.referral_bonus
-      })) || []
-    };
+    return { data: plans || [] };
   } catch (err) {
     console.error('Unexpected error in getInvestmentPlans:', err);
     return { error: 'An unexpected error occurred' };
   }
 }
 
-
-export async function updateInvestmentPlan(input: UpdateInvestmentPlanInput): Promise<{ success: boolean; error?: string }> {
+export async function updateInvestmentPlan(input: any): Promise<{ success: boolean; error?: string }> {
   try {
     const { id, ...updateFields } = input;
 
     const { error } = await supabase
-      .from('investment_plans')
+      .from('chainrise_investment_plans')
       .update({
         ...updateFields,
-        updated_at: new Date().toISOString() // optional: set an updated timestamp
+        updated_at: new Date().toISOString()
       })
       .eq('id', id);
 
@@ -61,12 +115,11 @@ export async function updateInvestmentPlan(input: UpdateInvestmentPlanInput): Pr
   }
 }
 
-
-// Get all crypto payment options
+// Crypto Payment Options
 export async function getCryptoPaymentOptions(): Promise<{ data?: CryptoPaymentOption[]; error?: string }> {
   try {
     const { data: options, error } = await supabase
-      .from('crypto_payment_options')
+      .from('chainrise_crypto_payment_options')
       .select('*')
       .eq('is_active', true);
 
@@ -90,6 +143,468 @@ export async function getCryptoPaymentOptions(): Promise<{ data?: CryptoPaymentO
   }
 }
 
+// Create a new investment
+export async function createInvestment(
+  planId: string,
+  amount: number
+): Promise<{ success?: boolean; error?: string; investment?: UserInvestment }> {
+  try {
+    console.log('Starting createInvestment with planId:', planId, 'amount:', amount);
+
+    const session = await getSession();
+    if (!session?.user) {
+      console.log('No session found - not authenticated');
+      if (typeof window !== 'undefined') {
+        window.location.href = '/signin';
+      } else {
+        redirect('/signin');
+      }
+      return { error: 'Not authenticated' };
+    }
+
+    const userId = session.user.id;
+    console.log('User ID:', userId);
+
+    // Fetch investment plan
+    const { data: plan, error: planError } = await supabase
+      .from('chainrise_investment_plans')
+      .select('*')
+      .eq('id', planId)
+      .single();
+
+    if (planError || !plan) {
+      console.error('Plan error:', planError, 'Plan data:', plan);
+      return { error: 'Invalid investment plan' };
+    }
+
+    const { min_amount, max_amount, daily_profit_percentage, duration_days } = plan;
+
+    console.log('Plan details:', {
+      min_amount,
+      max_amount,
+      daily_profit_percentage,
+      duration_days
+    });
+
+    // Validate amount range
+    if (amount < min_amount || (max_amount && amount > max_amount)) {
+      console.log(`Amount ${amount} is outside plan range (${min_amount}-${max_amount})`);
+      return { error: `Amount must be between $${min_amount} and $${max_amount} for this plan` };
+    }
+
+    // Check user balance and total_invested
+    const { data: user, error: userError } = await supabase
+      .from('chainrise_profile')
+      .select('balance, total_invested')
+      .eq('id', userId)
+      .single();
+
+    if (userError || !user) {
+      console.error('User balance error:', userError, 'User data:', user);
+      return { error: 'Failed to fetch user balance' };
+    }
+
+    console.log('User balance:', user.balance);
+    if (user.balance < amount) {
+      return { error: 'Insufficient balance' };
+    }
+
+    const currentDate = new Date();
+    const endDate = new Date(currentDate);
+    endDate.setDate(endDate.getDate() + duration_days);
+    
+    // Withdrawal lock period (2 months from start)
+    const withdrawalLockUntil = new Date(currentDate);
+    withdrawalLockUntil.setMonth(withdrawalLockUntil.getMonth() + 2);
+
+    console.log('Calculated dates:', {
+      endDate: endDate.toISOString(),
+      withdrawalLockUntil: withdrawalLockUntil.toISOString()
+    });
+
+    // Start transaction: Deduct amount from user balance
+    const { error: balanceUpdateError } = await supabase
+      .from('chainrise_profile')
+      .update({ 
+        balance: user.balance - amount,
+        total_invested: (user.total_invested || 0) + amount
+      })
+      .eq('id', userId);
+
+    if (balanceUpdateError) {
+      console.error('Failed to deduct from user balance:', balanceUpdateError);
+      return { error: 'Failed to process investment' };
+    }
+
+    // Create investment record
+    const { data: investment, error: investmentError } = await supabase
+      .from('chainrise_investments')
+      .insert({
+        user_id: userId,
+        plan_id: planId,
+        amount: amount,
+        current_balance: amount, // Start with initial amount
+        total_earned: 0.00,
+        start_date: currentDate.toISOString(),
+        end_date: endDate.toISOString(),
+        withdrawal_lock_until: withdrawalLockUntil.toISOString(),
+        status: 'active',
+        last_profit_calculated: currentDate.toISOString()
+      })
+      .select(`
+        *,
+        chainrise_investment_plans!inner (
+          title,
+          daily_profit_percentage
+        )
+      `)
+      .single();
+
+    if (investmentError) {
+      console.error('Investment creation failed:', investmentError);
+      
+      // Rollback balance deduction if investment creation fails
+      await supabase
+        .from('chainrise_profile')
+        .update({ 
+          balance: user.balance,
+          total_invested: user.total_invested
+        })
+        .eq('id', userId);
+      
+      return { error: 'Failed to create investment' };
+    }
+
+    // Record transaction
+    await supabase
+      .from('chainrise_transactions')
+      .insert({
+        user_id: userId,
+        type: 'investment',
+        amount: amount,
+        currency: 'USD',
+        description: `Investment in ${plan.title}`,
+        reference: `INV-${investment.id.slice(0, 8)}`,
+        status: 'completed',
+        metadata: {
+          plan_id: planId,
+          investment_id: investment.id,
+          plan_title: plan.title
+        }
+      });
+
+    console.log('Investment created successfully:', investment);
+
+    // Type-safe extraction of nested data
+    const investmentData = investment as any;
+    const planData = investmentData.chainrise_investment_plans;
+
+    return {
+      success: true,
+      investment: {
+        id: investmentData.id,
+        userId: investmentData.user_id,
+        planId: investmentData.plan_id,
+        amount: investmentData.amount,
+        currentBalance: investmentData.current_balance,
+        totalEarned: investmentData.total_earned,
+        startDate: investmentData.start_date,
+        endDate: investmentData.end_date,
+        withdrawalLockUntil: investmentData.withdrawal_lock_until,
+        status: investmentData.status,
+        lastProfitCalculated: investmentData.last_profit_calculated,
+        planTitle: planData?.title,
+        dailyProfitPercentage: planData?.daily_profit_percentage
+      }
+    };
+  } catch (err) {
+    console.error('Unexpected error in createInvestment:', err);
+    return { error: 'An unexpected error occurred' };
+  }
+}
+
+// Get user investments
+export async function getUserInvestments(): Promise<{ data?: UserInvestment[]; error?: string }> {
+  try {
+    const session = await getSession();
+    if (!session?.user) {
+      if (typeof window !== 'undefined') {
+        window.location.href = '/signin';
+      } else {
+        redirect('/signin');
+      }
+      return { error: 'Not authenticated' };
+    }
+
+    const userId = session.user.id;
+
+    const { data, error } = await supabase
+      .from('chainrise_investments')
+      .select(`
+        id,
+        user_id,
+        plan_id,
+        amount,
+        current_balance,
+        total_earned,
+        start_date,
+        end_date,
+        withdrawal_lock_until,
+        status,
+        last_profit_calculated,
+        created_at,
+        chainrise_investment_plans!inner (
+          title,
+          daily_profit_percentage
+        )
+      `)
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching investments:', error);
+      return { error: 'Failed to fetch investments' };
+    }
+
+    // Type-safe mapping
+    const investments: UserInvestment[] = (data || []).map((inv: any) => ({
+      id: inv.id,
+      userId: inv.user_id,
+      planId: inv.plan_id,
+      amount: inv.amount,
+      currentBalance: inv.current_balance,
+      totalEarned: inv.total_earned,
+      startDate: inv.start_date,
+      endDate: inv.end_date,
+      withdrawalLockUntil: inv.withdrawal_lock_until,
+      status: inv.status,
+      lastProfitCalculated: inv.last_profit_calculated,
+      planTitle: inv.chainrise_investment_plans?.title,
+      dailyProfitPercentage: inv.chainrise_investment_plans?.daily_profit_percentage
+    }));
+
+    return { data: investments };
+  } catch (err) {
+    console.error('Unexpected error in getUserInvestments:', err);
+    return { error: 'An unexpected error occurred' };
+  }
+}
+
+// Calculate daily profits (to be called by a cron job)
+export async function calculateDailyProfits(): Promise<{ success?: boolean; error?: string }> {
+  try {
+    console.log('Starting daily profit calculation...');
+
+    // Call the PostgreSQL function to calculate profits
+    const { error } = await supabase.rpc('calculate_daily_profits');
+
+    if (error) {
+      console.error('Error calculating daily profits:', error);
+      return { error: 'Failed to calculate daily profits' };
+    }
+
+    console.log('Daily profits calculated successfully');
+    return { success: true };
+  } catch (err) {
+    console.error('Unexpected error in calculateDailyProfits:', err);
+    return { error: 'An unexpected error occurred' };
+  }
+}
+
+// Check withdrawal eligibility
+export async function checkWithdrawalEligibility(
+  investmentId?: string
+): Promise<{ 
+  canWithdraw?: boolean; 
+  availableAmount?: number; 
+  message?: string; 
+  error?: string 
+}> {
+  try {
+    const session = await getSession();
+    if (!session?.user) {
+      return { error: 'Not authenticated' };
+    }
+
+    const userId = session.user.id;
+
+    const { data, error } = await supabase.rpc('check_withdrawal_eligibility', {
+      user_uuid: userId,
+      investment_uuid: investmentId || null
+    });
+
+    if (error) {
+      console.error('Error checking withdrawal eligibility:', error);
+      return { error: 'Failed to check withdrawal eligibility' };
+    }
+
+    if (data && data.length > 0) {
+      return {
+        canWithdraw: data[0].can_withdraw,
+        availableAmount: data[0].available_amount,
+        message: data[0].message
+      };
+    }
+
+    return { error: 'No data returned' };
+  } catch (err) {
+    console.error('Unexpected error in checkWithdrawalEligibility:', err);
+    return { error: 'An unexpected error occurred' };
+  }
+}
+
+// Withdraw from investment
+export async function withdrawFromInvestment(
+  investmentId: string,
+  amount: number
+): Promise<{ success?: boolean; error?: string }> {
+  try {
+    const session = await getSession();
+    if (!session?.user) {
+      return { error: 'Not authenticated' };
+    }
+
+    const userId = session.user.id;
+
+    // First check eligibility
+    const eligibility = await checkWithdrawalEligibility(investmentId);
+    if (eligibility.error || !eligibility.canWithdraw) {
+      return { error: eligibility.message || 'Withdrawal not allowed' };
+    }
+
+    if (amount > (eligibility.availableAmount || 0)) {
+      return { error: 'Insufficient funds available for withdrawal' };
+    }
+
+    // Start transaction
+    const { data: investment, error: investmentError } = await supabase
+      .from('chainrise_investments')
+      .select('current_balance, plan_id')
+      .eq('id', investmentId)
+      .eq('user_id', userId)
+      .single();
+
+    if (investmentError || !investment) {
+      return { error: 'Investment not found' };
+    }
+
+    // Update investment balance
+    const { error: updateError } = await supabase
+      .from('chainrise_investments')
+      .update({ 
+        current_balance: investment.current_balance - amount,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', investmentId);
+
+    if (updateError) {
+      return { error: 'Failed to update investment balance' };
+    }
+
+    // Add to user balance using proper Supabase increment
+    const { data: user, error: userError } = await supabase
+      .from('chainrise_profile')
+      .select('balance')
+      .eq('id', userId)
+      .single();
+
+    if (userError || !user) {
+      // Rollback investment update
+      await supabase
+        .from('chainrise_investments')
+        .update({ 
+          current_balance: investment.current_balance,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', investmentId);
+      return { error: 'Failed to fetch user balance' };
+    }
+
+    const { error: balanceError } = await supabase
+      .from('chainrise_profile')
+      .update({ 
+        balance: user.balance + amount,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', userId);
+
+    if (balanceError) {
+      // Rollback investment update
+      await supabase
+        .from('chainrise_investments')
+        .update({ 
+          current_balance: investment.current_balance,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', investmentId);
+      
+      return { error: 'Failed to process withdrawal' };
+    }
+
+    // Record withdrawal transaction
+    await supabase
+      .from('chainrise_transactions')
+      .insert({
+        user_id: userId,
+        type: 'withdrawal',
+        amount: amount,
+        currency: 'USD',
+        description: `Withdrawal from investment`,
+        reference: `WD-${investmentId.slice(0, 8)}-${Date.now()}`,
+        status: 'completed',
+        metadata: {
+          investment_id: investmentId,
+          plan_id: investment.plan_id
+        }
+      });
+
+    return { success: true };
+  } catch (err) {
+    console.error('Unexpected error in withdrawFromInvestment:', err);
+    return { error: 'An unexpected error occurred' };
+  }
+}
+
+// Manual profit withdrawal (withdraw only profits)
+export async function withdrawProfitsFromInvestment(
+  investmentId: string
+): Promise<{ success?: boolean; error?: string; amount?: number }> {
+  try {
+    const session = await getSession();
+    if (!session?.user) {
+      return { error: 'Not authenticated' };
+    }
+
+    const userId = session.user.id;
+
+    // Get investment details
+    const { data: investment, error: investmentError } = await supabase
+      .from('chainrise_investments')
+      .select('current_balance, amount, total_earned')
+      .eq('id', investmentId)
+      .eq('user_id', userId)
+      .single();
+
+    if (investmentError || !investment) {
+      return { error: 'Investment not found' };
+    }
+
+    // Calculate available profits (current balance minus initial amount)
+    const availableProfits = investment.current_balance - investment.amount;
+    
+    if (availableProfits <= 0) {
+      return { error: 'No profits available for withdrawal' };
+    }
+
+    // Withdraw only the profits
+    return await withdrawFromInvestment(investmentId, availableProfits);
+  } catch (err) {
+    console.error('Unexpected error in withdrawProfitsFromInvestment:', err);
+    return { error: 'An unexpected error occurred' };
+  }
+}
+
+// Deposit Functions
 export async function initiateDeposit({
   planId,
   amount,
@@ -97,34 +612,25 @@ export async function initiateDeposit({
   transactionHash
 }: DepositInput): Promise<{ success?: boolean; error?: string; depositId?: string }> {
   try {
-    console.log('[initiateDeposit] Starting deposit process with params:', {
-      planId,
-      amount,
-      cryptoType,
-      transactionHash: transactionHash ? 'provided' : 'not provided'
-    });
+    console.log('[initiateDeposit] Starting deposit process');
 
-    // 1. Get current session
-    console.log('[initiateDeposit] Getting user session...');
     const session = await getSession();
     if (!session?.user) {
       console.warn('[initiateDeposit] No authenticated user found');
       if (typeof window !== 'undefined') {
-                window.location.href = '/signin';
-              } else {
-                redirect('/signin'); // for use in server-side functions (Next.js App Router only)
-              }
+        window.location.href = '/signin';
+      } else {
+        redirect('/signin');
+      }
       return { error: 'Not authenticated' };
     }
-    console.log('[initiateDeposit] User authenticated:', session.user.id);
 
     const userId = session.user.id;
 
-    // 2. Validate amount against selected plan
-    console.log(`[initiateDeposit] Validating plan ${planId} and amount ${amount}...`);
+    // Validate plan
     const { data: plan, error: planError } = await supabase
-      .from('investment_plans')
-      .select('min_amount, max_amount')
+      .from('chainrise_investment_plans')
+      .select('min_amount, max_amount, title')
       .eq('id', planId)
       .single();
 
@@ -132,46 +638,37 @@ export async function initiateDeposit({
       console.error('[initiateDeposit] Plan validation failed:', planError || 'Plan not found');
       return { error: 'Invalid investment plan' };
     }
-    console.log('[initiateDeposit] Plan validated:', plan);
 
-    if (amount < plan.min_amount || amount > plan.max_amount) {
-      console.warn(`[initiateDeposit] Amount ${amount} outside plan range (${plan.min_amount}-${plan.max_amount})`);
+    if (amount < plan.min_amount || (plan.max_amount && amount > plan.max_amount)) {
       return { error: `Amount must be between $${plan.min_amount} and $${plan.max_amount} for this plan` };
     }
-    console.log('[initiateDeposit] Amount validated');
 
-    // 3. Get wallet address for selected crypto
-    console.log(`[initiateDeposit] Getting wallet address for ${cryptoType}...`);
+    // Get crypto wallet address
     const { data: cryptoOption, error: cryptoError } = await supabase
-      .from('crypto_payment_options')
+      .from('chainrise_crypto_payment_options')
       .select('wallet_address')
       .eq('symbol', cryptoType)
       .single();
 
     if (cryptoError || !cryptoOption) {
-      console.error('[initiateDeposit] Crypto validation failed:', cryptoError || 'Crypto option not found');
       return { error: 'Invalid cryptocurrency selected' };
     }
-    console.log('[initiateDeposit] Wallet address retrieved');
 
-    // 4. Generate reference
+    // Generate reference
     const reference = `DEP-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-    const narration = `Investment deposit for plan ${planId}`;
-    console.log('[initiateDeposit] Generated reference:', reference);
 
-    // 5. Create deposit record
-    console.log('[initiateDeposit] Creating deposit record...');
+    // Create deposit record
     const { data: deposit, error: depositError } = await supabase
-      .from('deposits')
+      .from('chainrise_deposits')
       .insert([{
         user_id: userId,
-        plan_id: planId,
+        investment_plan_id: planId,
         amount,
         crypto_type: cryptoType,
         wallet_address: cryptoOption.wallet_address,
         transaction_hash: transactionHash,
         reference,
-        narration
+        status: 'pending'
       }])
       .select()
       .single();
@@ -180,24 +677,20 @@ export async function initiateDeposit({
       console.error('[initiateDeposit] Deposit creation failed:', depositError);
       return { error: 'Failed to initiate deposit' };
     }
-    console.log('[initiateDeposit] Deposit created successfully:', deposit.id);
 
-    // 6. Notify admin
-    console.log('[initiateDeposit] Sending admin notification...');
+    // Notify admin
     await sendDepositNotificationToAdmin({
       userId,
       userEmail: session.user.email || '',
       amount,
-      planId,
+      planTitle: plan.title,
       cryptoType,
       reference,
       depositId: deposit.id,
       walletAddress: cryptoOption.wallet_address,
       transactionHash
     });
-    console.log('[initiateDeposit] Admin notification sent');
 
-    console.log('[initiateDeposit] Deposit process completed successfully');
     return { success: true, depositId: deposit.id };
   } catch (err) {
     console.error('[initiateDeposit] Unexpected error:', err);
@@ -205,11 +698,163 @@ export async function initiateDeposit({
   }
 }
 
+// Get user deposits
+export async function getUserDeposits(
+  filters: {
+    status?: DepositStatus;
+    limit?: number;
+    offset?: number;
+  } = {}
+): Promise<{ data?: Deposit[]; error?: string; count?: number }> {
+  try {
+    const session = await getSession();
+    if (!session?.user) {
+      if (typeof window !== 'undefined') {
+        window.location.href = '/signin';
+      } else {
+        redirect('/signin');
+      }
+      return { error: 'Not authenticated' };
+    }
+
+    const userId = session.user.id;
+
+    let query = supabase
+      .from('chainrise_deposits')
+      .select(`
+        id,
+        amount,
+        crypto_type,
+        status,
+        reference,
+        created_at,
+        processed_at,
+        transaction_hash,
+        admin_notes,
+        chainrise_investment_plans!inner(title)
+      `, { count: 'exact' })
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+
+    if (filters.status) {
+      query = query.eq('status', filters.status);
+    }
+
+    if (filters.limit) {
+      query = query.limit(filters.limit);
+    }
+
+    if (filters.offset !== undefined && filters.limit) {
+      query = query.range(filters.offset, filters.offset + filters.limit - 1);
+    }
+
+    const { data, error, count } = await query;
+
+    if (error) {
+      console.error('Error fetching deposits:', error);
+      return { error: 'Failed to fetch deposits' };
+    }
+
+    return {
+      data: data?.map(deposit => ({
+        id: deposit.id,
+        amount: deposit.amount,
+        cryptoType: deposit.crypto_type,
+        status: deposit.status,
+        reference: deposit.reference,
+        createdAt: deposit.created_at,
+        processedAt: deposit.processed_at,
+        transactionHash: deposit.transaction_hash,
+        adminNotes: deposit.admin_notes,
+        planTitle: (deposit as any).chainrise_investment_plans?.title
+      })),
+      count: count || 0
+    };
+  } catch (err) {
+    console.error('Unexpected error in getUserDeposits:', err);
+    return { error: 'An unexpected error occurred' };
+  }
+}
+
+// Get all deposits (admin)
+export async function getAllDeposits(
+  filters: {
+    status?: DepositStatus;
+    userId?: string;
+    limit?: number;
+    offset?: number;
+  } = {}
+): Promise<{ data?: Deposit[]; error?: string; count?: number }> {
+  try {
+    let query = supabase
+      .from('chainrise_deposits')
+      .select(`
+        id,
+        amount,
+        crypto_type,
+        status,
+        reference,
+        created_at,
+        processed_at,
+        transaction_hash,
+        admin_notes,
+        chainrise_investment_plans!inner(title),
+        chainrise_profile!inner(email, username)
+      `, { count: 'exact' })
+      .order('created_at', { ascending: false });
+
+    if (filters.status) {
+      query = query.eq('status', filters.status);
+    }
+
+    if (filters.userId) {
+      query = query.eq('user_id', filters.userId);
+    }
+
+    if (filters.limit) {
+      query = query.limit(filters.limit);
+    }
+
+    if (filters.offset !== undefined && filters.limit) {
+      query = query.range(filters.offset, filters.offset + filters.limit - 1);
+    }
+
+    const { data, error, count } = await query;
+
+    if (error) {
+      console.error('Error fetching deposits:', error);
+      return { error: 'Failed to fetch deposits' };
+    }
+
+    return {
+      data: data?.map(deposit => ({
+        id: deposit.id,
+        amount: deposit.amount,
+        cryptoType: deposit.crypto_type,
+        status: deposit.status,
+        reference: deposit.reference,
+        createdAt: deposit.created_at,
+        processedAt: deposit.processed_at,
+        transactionHash: deposit.transaction_hash,
+        adminNotes: deposit.admin_notes,
+        planTitle: (deposit as any).chainrise_investment_plans?.title,
+        userEmail: (deposit as any).chainrise_profile?.email,
+        username: (deposit as any).chainrise_profile?.username
+      })),
+      count: count || 0
+    };
+  } catch (err) {
+    console.error('Unexpected error in getAllDeposits:', err);
+    return { error: 'An unexpected error occurred' };
+  }
+}
+
+// Helper function to send deposit notification to admin
 async function sendDepositNotificationToAdmin(params: {
   userId: string;
   userEmail: string;
   amount: number;
-  planId: number;
+  planTitle: string;
   cryptoType: string;
   reference: string;
   depositId: string;
@@ -217,8 +862,6 @@ async function sendDepositNotificationToAdmin(params: {
   transactionHash?: string;
 }) {
   try {
-    console.log('[sendDepositNotificationToAdmin] Preparing email notification for deposit:', params.depositId);
-
     const transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: {
@@ -227,58 +870,39 @@ async function sendDepositNotificationToAdmin(params: {
       },
     });
 
-    // Get plan title for email
-    console.log('[sendDepositNotificationToAdmin] Fetching plan details...');
-    const { data: plan } = await supabase
-      .from('investment_plans')
-      .select('title')
-      .eq('id', params.planId)
-      .single();
-
     const mailOptions = {
-      from: `Your App Name <${process.env.EMAIL_USERNAME}>`,
+      from: `ChainRise <${process.env.EMAIL_USERNAME}>`,
       to: process.env.ADMIN_EMAIL,
-      subject: `New Deposit Request - ${params.amount} ${params.cryptoType}`,
+      subject: `New Deposit Request - $${params.amount} ${params.cryptoType}`,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <h2 style="color: #2a52be;">New Deposit Request</h2>
           <p><strong>User ID:</strong> ${params.userId}</p>
           <p><strong>User Email:</strong> ${params.userEmail}</p>
-          <p><strong>Plan:</strong> ${plan?.title || params.planId}</p>
-          <p><strong>Amount:</strong> ${params.amount}</p>
+          <p><strong>Plan:</strong> ${params.planTitle}</p>
+          <p><strong>Amount:</strong> $${params.amount}</p>
           <p><strong>Crypto Type:</strong> ${params.cryptoType}</p>
           <p><strong>Wallet Address:</strong> ${params.walletAddress}</p>
           ${params.transactionHash ? `<p><strong>Transaction Hash:</strong> ${params.transactionHash}</p>` : ''}
           <p><strong>Reference:</strong> ${params.reference}</p>
-          
-          <div style="margin-top: 30px;">
-            <a href="${process.env.ADMIN_URL}/deposits/${params.depositId}/approve" 
-               style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
-              Approve Deposit
-            </a>
-            <a href="${process.env.ADMIN_URL}/deposits/${params.depositId}/reject" 
-               style="background-color: #f44336; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-left: 10px;">
-              Reject Deposit
-            </a>
-          </div>
         </div>
       `,
     };
 
-    console.log('[sendDepositNotificationToAdmin] Sending email...');
     await transporter.sendMail(mailOptions);
-    console.log('[sendDepositNotificationToAdmin] Email sent successfully');
   } catch (error) {
-    console.error('[sendDepositNotificationToAdmin] Failed to send email:', error);
+    console.error('Failed to send admin notification:', error);
   }
 }
-// Approve a deposit
+
+
+
 export async function approveDeposit(depositId: string): Promise<{ success?: boolean; error?: string; currentStatus?: string }> {
   try {
     // 1. Verify deposit exists and is pending
     const { data: deposit, error: fetchError } = await supabase
-      .from('deposits')
-      .select('status, user_id, amount, plan_id')
+      .from('chainrise_deposits')
+      .select('status, user_id, amount, investment_plan_id')
       .eq('id', depositId)
       .single();
 
@@ -294,18 +918,18 @@ export async function approveDeposit(depositId: string): Promise<{ success?: boo
       };
     }
 
-      // 2. Process referral bonus if this is the user's first deposit
-      if (deposit.amount > 0) {
-        const { error: referralError } = await processReferralBonus(deposit.user_id, deposit.amount);
-        if (referralError) {
-          console.error('Referral bonus processing failed:', referralError);
-          // Continue with deposit approval even if referral bonus fails
-        }
+    // 2. Process referral bonus if this is the user's first deposit
+    if (deposit.amount > 0) {
+      const { error: referralError } = await processReferralBonus(deposit.user_id, deposit.amount);
+      if (referralError) {
+        console.error('Referral bonus processing failed:', referralError);
+        // Continue with deposit approval even if referral bonus fails
       }
+    }
 
-    // 2. Update status to completed (trigger will handle balance update)
+    // 3. Update status to completed and add to user balance
     const { error: updateError } = await supabase
-      .from('deposits')
+      .from('chainrise_deposits')
       .update({ 
         status: 'completed',
         processed_at: new Date().toISOString()
@@ -317,7 +941,49 @@ export async function approveDeposit(depositId: string): Promise<{ success?: boo
       return { error: 'Failed to approve deposit' };
     }
 
-    // 3. Send confirmation to user
+    // 4. Add deposit amount to user balance
+    const { data: user, error: userError } = await supabase
+      .from('chainrise_profile')
+      .select('balance')
+      .eq('id', deposit.user_id)
+      .single();
+
+    if (userError || !user) {
+      console.error('User balance fetch failed:', userError);
+      // Continue anyway since the deposit is marked as completed
+    } else {
+      const { error: balanceError } = await supabase
+        .from('chainrise_profile')
+        .update({ 
+          balance: user.balance + deposit.amount,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', deposit.user_id);
+
+      if (balanceError) {
+        console.error('Balance update failed:', balanceError);
+        // Log the error but don't fail the approval
+      }
+
+      // Record transaction
+      await supabase
+        .from('chainrise_transactions')
+        .insert({
+          user_id: deposit.user_id,
+          type: 'deposit',
+          amount: deposit.amount,
+          currency: 'USD',
+          description: `Deposit approved`,
+          reference: `DEP-APPROVED-${depositId.slice(0, 8)}`,
+          status: 'completed',
+          metadata: {
+            deposit_id: depositId,
+            plan_id: deposit.investment_plan_id
+          }
+        });
+    }
+
+    // 5. Send confirmation to user
     await sendDepositConfirmationToUser(deposit.user_id, deposit.amount, depositId);
 
     return { success: true };
@@ -327,13 +993,13 @@ export async function approveDeposit(depositId: string): Promise<{ success?: boo
   }
 }
 
-// Reject a deposit
+// Reject a deposit (Admin function)
 export async function rejectDeposit(depositId: string, adminNotes: string = ''): Promise<{ success?: boolean; error?: string; currentStatus?: string }> {
   try {
     // 1. Verify deposit exists and is pending
     const { data: deposit, error: fetchError } = await supabase
-      .from('deposits')
-      .select('status')
+      .from('chainrise_deposits')
+      .select('status, user_id, amount')
       .eq('id', depositId)
       .single();
 
@@ -351,9 +1017,9 @@ export async function rejectDeposit(depositId: string, adminNotes: string = ''):
 
     // 2. Update status to rejected
     const { error: updateError } = await supabase
-      .from('deposits')
+      .from('chainrise_deposits')
       .update({ 
-        status: 'rejected',
+        status: 'cancelled',
         processed_at: new Date().toISOString(),
         admin_notes: adminNotes
       })
@@ -364,6 +1030,9 @@ export async function rejectDeposit(depositId: string, adminNotes: string = ''):
       return { error: 'Failed to reject deposit' };
     }
 
+    // 3. Send rejection notification to user
+    await sendDepositRejectionToUser(deposit.user_id, deposit.amount, depositId, adminNotes);
+
     return { success: true };
   } catch (err) {
     console.error('Unexpected error in rejectDeposit:', err);
@@ -371,201 +1040,41 @@ export async function rejectDeposit(depositId: string, adminNotes: string = ''):
   }
 }
 
-// Get user deposits
-export async function getUserDeposits(
-  filters: {
-    status?: DepositStatus;
-    limit?: number;
-    offset?: number;
-  } = {}
-): Promise<{ data?: Deposit[]; error?: string; count?: number }> {
+// Confirm deposit (when transaction hash is provided)
+export async function confirmDeposit(depositId: string, transactionHash: string): Promise<{ success?: boolean; error?: string }> {
   try {
-    // 1. Get current session
-    const session = await getSession();
-    if (!session?.user) {
-      if (typeof window !== 'undefined') {
-        window.location.href = '/signin';
-      } else {
-        redirect('/signin'); // for use in server-side functions (Next.js App Router only)
-      }
-      return { error: 'Not authenticated' };
+    const { data: deposit, error: fetchError } = await supabase
+      .from('chainrise_deposits')
+      .select('status, user_id')
+      .eq('id', depositId)
+      .single();
+
+    if (fetchError || !deposit) {
+      console.error('Deposit fetch failed:', fetchError);
+      return { error: 'Deposit not found' };
     }
 
-    const userId = session.user.id;
-
-    // 2. Build base query
-    let query = supabase
-      .from('deposits')
-      .select(`
-        id,
-        amount,
-        crypto_type,
-        status,
-        reference,
-        created_at,
-        processed_at,
-        transaction_hash,
-        investment_plans!inner(title)
-      `, { count: 'exact' })
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false });
-
-    // 3. Apply filters
-    if (filters.status) {
-      query = query.eq('status', filters.status);
+    if (deposit.status !== 'pending') {
+      return { error: 'Deposit already processed' };
     }
 
-    if (filters.limit) {
-      query = query.limit(filters.limit);
+    const { error: updateError } = await supabase
+      .from('chainrise_deposits')
+      .update({ 
+        status: 'confirmed',
+        transaction_hash: transactionHash,
+        confirmed_at: new Date().toISOString()
+      })
+      .eq('id', depositId);
+
+    if (updateError) {
+      console.error('Confirmation failed:', updateError);
+      return { error: 'Failed to confirm deposit' };
     }
 
-    if (filters.offset !== undefined && filters.limit) {
-      query = query.range(filters.offset, filters.offset + filters.limit - 1);
-    }
-
-    // 4. Execute query
-    const { data, error, count } = await query;
-
-    if (error) {
-      console.error('Error fetching deposits:', error);
-      return { error: 'Failed to fetch deposits' };
-    }
-
-    return {
-        data: data?.map(deposit => ({
-            id: deposit.id,
-            amount: deposit.amount,
-            cryptoType: deposit.crypto_type,
-            status: deposit.status,
-            reference: deposit.reference,
-            createdAt: deposit.created_at,
-            processedAt: deposit.processed_at,
-            transactionHash: deposit.transaction_hash,
-            planTitle: deposit.investment_plans[0]?.title 
-          })),
-      count: count || 0
-    };
+    return { success: true };
   } catch (err) {
-    console.error('Unexpected error in getUserDeposits:', err);
-    return { error: 'An unexpected error occurred' };
-  }
-}
-
-
-export async function getAllDepositss(): Promise<{ data?: Deposit[]; error?: string }> {
-  try {
-    // Execute simple query to get all deposits
-    const { data, error } = await supabase
-      .from('deposits')  // Changed from 'getAllDeposits' to 'deposits'
-      .select(`
-        id,
-        amount,
-        crypto_type,
-        status,
-        reference,
-        created_at,
-        processed_at,
-        transaction_hash,
-        admin_notes
-      `)
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      console.error('Error fetching deposits:', error);
-      return { error: 'Failed to fetch deposits' };
-    }
-
-    // Simplify the data mapping
-    return {
-      data: data?.map(deposit => ({
-        id: deposit.id,
-        amount: deposit.amount,
-        cryptoType: deposit.crypto_type,
-        status: deposit.status,
-        reference: deposit.reference,
-        createdAt: deposit.created_at,
-        processedAt: deposit.processed_at,
-        transactionHash: deposit.transaction_hash,
-        adminNotes: deposit.admin_notes
-      }))
-    };
-  } catch (err) {
-    console.error('Unexpected error in getAllDeposits:', err);
-    return { error: 'An unexpected error occurred' };
-  }
-}
-// Get all deposits (admin)
-export async function getAllDeposits(
-  filters: {
-    status?: DepositStatus;
-    userId?: string;
-    limit?: number;
-    offset?: number;
-  } = {}
-): Promise<{ data?: Deposit[]; error?: string; count?: number }> {
-  try {
-    // 1. Build base query
-    let query = supabase
-      .from('deposits')
-      .select(`
-        id,
-        amount,
-        crypto_type,
-        status,
-        reference,
-        created_at,
-        processed_at,
-        transaction_hash,
-        admin_notes,
-        investment_plans!inner(title),
-        accilent_profile!inner(email, username)
-      `, { count: 'exact' })
-      .order('created_at', { ascending: false });
-
-    // 2. Apply filters
-    if (filters.status) {
-      query = query.eq('status', filters.status);
-    }
-
-    if (filters.userId) {
-      query = query.eq('user_id', filters.userId);
-    }
-
-    if (filters.limit) {
-      query = query.limit(filters.limit);
-    }
-
-    if (filters.offset !== undefined && filters.limit) {
-      query = query.range(filters.offset, filters.offset + filters.limit - 1);
-    }
-
-    // 3. Execute query
-    const { data, error, count } = await query;
-
-    if (error) {
-      console.error('Error fetching deposits:', error);
-      return { error: 'Failed to fetch deposits' };
-    }
-
-    return {
-        data: data?.map(deposit => ({
-            id: deposit.id,
-            amount: deposit.amount,
-            cryptoType: deposit.crypto_type,
-            status: deposit.status,
-            reference: deposit.reference,
-            createdAt: deposit.created_at,
-            processedAt: deposit.processed_at,
-            transactionHash: deposit.transaction_hash,
-            adminNotes: deposit.admin_notes,
-            planTitle: deposit.investment_plans[0]?.title, // Access first element of array
-            userEmail: deposit.accilent_profile[0]?.email, // Access first element of array
-            username: deposit.accilent_profile[0]?.username // Access first element of array
-          })),
-      count: count || 0
-    };
-  } catch (err) {
-    console.error('Unexpected error in getAllDeposits:', err);
+    console.error('Unexpected error in confirmDeposit:', err);
     return { error: 'An unexpected error occurred' };
   }
 }
@@ -574,8 +1083,8 @@ export async function getAllDeposits(
 async function sendDepositConfirmationToUser(userId: string, amount: number, depositId: string) {
   try {
     const { data: user } = await supabase
-      .from('accilent_profile')
-      .select('email')
+      .from('chainrise_profile')
+      .select('email, name')
       .eq('id', userId)
       .single();
 
@@ -590,21 +1099,165 @@ async function sendDepositConfirmationToUser(userId: string, amount: number, dep
     });
 
     const mailOptions = {
-      from: `Your App Name <${process.env.EMAIL_USERNAME}>`,
+      from: `ChainRise <${process.env.EMAIL_USERNAME}>`,
       to: user.email,
       subject: `Deposit of $${amount} Approved`,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2 style="color: #2a52be;">Deposit Approved</h2>
-          <p>Your deposit of <strong>$${amount}</strong> has been approved and your account has been credited.</p>
-          <p>Deposit ID: ${depositId}</p>
-          <p>Thank you for investing with us!</p>
+          <h2 style="color: #2a52be;">Deposit Approved ✅</h2>
+          <p>Dear ${user.name || 'Valued Customer'},</p>
+          <p>We're pleased to inform you that your deposit of <strong>$${amount}</strong> has been approved and your account balance has been updated.</p>
+          <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin: 20px 0;">
+            <p><strong>Deposit ID:</strong> ${depositId}</p>
+            <p><strong>Amount:</strong> $${amount}</p>
+            <p><strong>Status:</strong> Completed</p>
+          </div>
+          <p>You can now use these funds to make investments in any of our available plans.</p>
+          <p>Thank you for choosing ChainRise!</p>
         </div>
       `,
     };
 
     await transporter.sendMail(mailOptions);
+    console.log(`Deposit confirmation email sent to ${user.email}`);
   } catch (error) {
     console.error('Failed to send deposit confirmation:', error);
+  }
+}
+
+// Helper function to send deposit rejection to user
+async function sendDepositRejectionToUser(userId: string, amount: number, depositId: string, adminNotes: string) {
+  try {
+    const { data: user } = await supabase
+      .from('chainrise_profile')
+      .select('email, name')
+      .eq('id', userId)
+      .single();
+
+    if (!user?.email) return;
+
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: process.env.EMAIL_USERNAME,
+        pass: process.env.EMAIL_PASSWORD,
+      },
+    });
+
+    const mailOptions = {
+      from: `ChainRise <${process.env.EMAIL_USERNAME}>`,
+      to: user.email,
+      subject: `Deposit of $${amount} Requires Attention`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #dc3545;">Deposit Requires Attention</h2>
+          <p>Dear ${user.name || 'Valued Customer'},</p>
+          <p>We regret to inform you that your deposit of <strong>$${amount}</strong> could not be processed.</p>
+          <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin: 20px 0;">
+            <p><strong>Deposit ID:</strong> ${depositId}</p>
+            <p><strong>Amount:</strong> $${amount}</p>
+            <p><strong>Status:</strong> Cancelled</p>
+            ${adminNotes ? `<p><strong>Admin Notes:</strong> ${adminNotes}</p>` : ''}
+          </div>
+          <p>If you believe this is an error, please contact our support team with your deposit details.</p>
+          <p>Best regards,<br>ChainRise Support Team</p>
+        </div>
+      `,
+    };
+
+    await transporter.sendMail(mailOptions);
+    console.log(`Deposit rejection email sent to ${user.email}`);
+  } catch (error) {
+    console.error('Failed to send deposit rejection:', error);
+  }
+}
+
+// Get deposit by ID
+export async function getDepositById(depositId: string): Promise<{ data?: Deposit; error?: string }> {
+  try {
+    const { data: deposit, error } = await supabase
+      .from('chainrise_deposits')
+      .select(`
+        id,
+        amount,
+        crypto_type,
+        status,
+        reference,
+        created_at,
+        processed_at,
+        transaction_hash,
+        admin_notes,
+        wallet_address,
+        chainrise_investment_plans!inner(title),
+        chainrise_profile!inner(email, username, name)
+      `)
+      .eq('id', depositId)
+      .single();
+
+    if (error) {
+      console.error('Error fetching deposit:', error);
+      return { error: 'Failed to fetch deposit' };
+    }
+
+    if (!deposit) {
+      return { error: 'Deposit not found' };
+    }
+
+    return {
+      data: {
+        id: deposit.id,
+        amount: deposit.amount,
+        cryptoType: deposit.crypto_type,
+        status: deposit.status,
+        reference: deposit.reference,
+        createdAt: deposit.created_at,
+        processedAt: deposit.processed_at,
+        transactionHash: deposit.transaction_hash,
+        adminNotes: deposit.admin_notes,
+        planTitle: (deposit as any).chainrise_investment_plans?.title,
+        userEmail: (deposit as any).chainrise_profile?.email,
+        username: (deposit as any).chainrise_profile?.username
+      }
+    };
+  } catch (err) {
+    console.error('Unexpected error in getDepositById:', err);
+    return { error: 'An unexpected error occurred' };
+  }
+}
+
+// Update deposit status
+export async function updateDepositStatus(
+  depositId: string, 
+  status: DepositStatus, 
+  adminNotes?: string
+): Promise<{ success?: boolean; error?: string }> {
+  try {
+    const updateData: any = { 
+      status,
+      updated_at: new Date().toISOString()
+    };
+
+    if (status === 'completed' || status === 'cancelled') {
+      updateData.processed_at = new Date().toISOString();
+    }
+
+    if (adminNotes) {
+      updateData.admin_notes = adminNotes;
+    }
+
+    const { error } = await supabase
+      .from('chainrise_deposits')
+      .update(updateData)
+      .eq('id', depositId);
+
+    if (error) {
+      console.error('Error updating deposit status:', error);
+      return { error: 'Failed to update deposit status' };
+    }
+
+    return { success: true };
+  } catch (err) {
+    console.error('Unexpected error in updateDepositStatus:', err);
+    return { error: 'An unexpected error occurred' };
   }
 }

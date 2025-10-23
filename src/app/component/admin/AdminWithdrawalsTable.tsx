@@ -255,7 +255,7 @@ export default function AdminWithdrawalsTable() {
                         {withdrawal.walletAddress}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusColors[withdrawal.status]}`}>
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusColors[withdrawal.status as keyof typeof statusColors] ?? 'bg-gray-100 text-gray-800'}`}>
                           {withdrawal.status}
                         </span>
                       </td>
