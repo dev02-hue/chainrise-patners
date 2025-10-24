@@ -36,7 +36,7 @@ interface Transaction {
 }
 
 // Updated statusMap with light, pleasant colors
-const statusMap: Record<TransactionStatus, { 
+const statusMap: Record<string, { 
   color: string; 
   bgColor: string;
   icon: React.JSX.Element; 
@@ -203,14 +203,19 @@ const TransactionsTable = () => {
   };
 
   const getStatusBadge = (status: TransactionStatus) => {
-    const statusInfo = statusMap[status];
-    return (
-      <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border ${statusInfo.bgColor} ${statusInfo.color}`}>
-        <span className="mr-1.5">{statusInfo.icon}</span>
-        {statusInfo.label}
-      </span>
-    );
-  };
+      const statusInfo = statusMap[status] ?? {
+        color: 'text-gray-600',
+        bgColor: 'bg-gray-50 border-gray-100',
+        icon: <FiClock className="text-gray-500" />,
+        label: String(status)
+      };
+      return (
+        <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border ${statusInfo.bgColor} ${statusInfo.color}`}>
+          <span className="mr-1.5">{statusInfo.icon}</span>
+          {statusInfo.label}
+        </span>
+      );
+    };
 
   // Stats calculation
   const stats = {

@@ -78,6 +78,8 @@ export type CryptoType = 'BTC' | 'ETH' | 'BNB' | 'DOGE' | 'SOL' | 'USDT' | 'XRP'
 
 export interface Deposit {
   id: string;
+  user_id?: string;
+created_at?: string;
   amount: number;
   cryptoType: string; // Changed from CryptoType to string for flexibility
   status: DepositStatus;
@@ -303,10 +305,10 @@ export type BanRecord = {
 //   | "confirmed"
 //   | "cancelled";
 
-export interface Deposit {
-  id: string;
-  user_id: string;
-  amount: number;
-  status: DepositStatus;
-  created_at: string;
-}
+// export interface Deposit {
+//   id: string;
+//   user_id: string;
+//   amount: number;
+//   status: DepositStatus;
+//   created_at: string;
+// }

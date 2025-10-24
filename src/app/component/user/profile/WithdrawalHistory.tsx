@@ -36,6 +36,10 @@ const statusConfig: Record<WithdrawalStatus, { color: string; icon: React.ReactN
   cancelled: {
     color: 'bg-gray-100 text-gray-800',
     icon: <FiXCircle className="text-gray-500" />
+  },
+  reference: {
+    color: 'bg-indigo-100 text-indigo-800',
+    icon: <FiFilter className="text-indigo-500" />
   }
 };
 
