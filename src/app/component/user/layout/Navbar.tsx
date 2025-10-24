@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
@@ -12,11 +12,16 @@ import {
   FiActivity, 
   FiMenu,
   FiX,
-  FiLogOut
+  FiLogOut,
+  FiSettings,
+  FiShare2,
+ 
+  FiPieChart
 } from "react-icons/fi";
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { signOut } from '@/lib/auth';
+import { AiFillWallet } from "react-icons/ai";
 
 const SignOutButton = () => {
   const router = useRouter();
@@ -24,189 +29,224 @@ const SignOutButton = () => {
 
   const handleSignOut = async () => {
     try {
-      // First call the server action to handle server-side sign out
       const result = await signOut();
       
       if (result.error) {
         console.error('Sign out error:', result.error);
-        alert('Failed to sign out. Please try again.');
         return;
       }
 
-      // Then handle client-side sign out with Supabase
       const { error } = await supabase.auth.signOut();
       
       if (error) {
         console.error('Supabase sign out error:', error.message);
-        alert('Failed to sign out. Please try again.');
         return;
       }
 
-      // Redirect to home page after successful sign out
       router.push('/signin');
-      router.refresh(); // Ensure the page updates with the new auth state
-
+      router.refresh();
     } catch (err) {
       console.error('Unexpected sign out error:', err);
-      alert('An unexpected error occurred during sign out.');
     }
   };
 
   return (
     <button
       onClick={handleSignOut}
-      className="flex items-center w-full py-3 px-3 text-gray-300 hover:text-emerald-400 rounded-lg hover:bg-gray-700"
+      className="flex items-center w-full py-2.5 px-4 text-gray-600 hover:text-red-500 rounded-lg hover:bg-red-50 transition-all duration-200 group"
     >
-      <FiLogOut className="mr-2" />
-      <span>Sign Out</span>
+      <FiLogOut className="mr-3 text-lg group-hover:scale-110 transition-transform" />
+      <span className="font-medium">Sign Out</span>
     </button>
   );
 };
 
 const navItems = [
-  { name: "Dashboard", href: "/user/dashboard", icon: <FiHome className="mr-2" /> },
+  { 
+    name: "Dashboard", 
+    href: "/user/dashboard", 
+    icon: <FiHome className="text-lg" /> 
+  },
   {
     name: "My Account",
-    icon: <FiUser className="mr-2" />,
+    icon: <FiUser className="text-lg" />,
     dropdown: [
-      { name: "Profile Setting", href: "/user/profile-setting" },
-      { name: "My Referral", href: "/user/my-referral" },
-      { name: "All Wallet Addresses", href: "/user/all-wallets" },
-      { name: "New Wallet Address", href: "/user/new-wallets" },
+      { name: "Profile Setting", href: "/user/profile-setting", icon: <FiSettings size={16} /> },
+      { name: "My Referral", href: "/user/my-referral", icon: <FiShare2 size={16} /> },
+      { name: "All Wallet Addresses", href: "/user/all-wallets", icon: <AiFillWallet size={16} /> },
+      { name: "New Wallet Address", href: "/user/new-wallets", icon: <AiFillWallet size={16} /> },
     ],
   },
   {
     name: "Deposit",
-    icon: <FiDollarSign className="mr-2" />,
+    icon: <FiDollarSign className="text-lg" />,
     dropdown: [
-      { name: "All Deposit", href: "/user/deposit-all" },
-      { name: "New Deposit", href: "/user/deposit-new" },
+      { name: "All Deposit", href: "/user/deposit-all", icon: <FiPieChart size={16} /> },
+      { name: "New Deposit", href: "/user/deposit-new", icon: <FiDollarSign size={16} /> },
     ],
   },
   {
     name: "Investment",
-    icon: <FiTrendingUp className="mr-2" />,
+    icon: <FiTrendingUp className="text-lg" />,
     dropdown: [
-      { name: "All Investment", href: "/user/investment-all" },
-      { name: "New Investment", href: "/user/investment-new" },
+      { name: "All Investment", href: "/user/investment-all", icon: <FiActivity size={16} /> },
+      { name: "New Investment", href: "/user/investment-new", icon: <FiTrendingUp size={16} /> },
     ],
   },
   {
     name: "Withdrawal",
-    icon: <FiCreditCard className="mr-2" />,
+    icon: <FiCreditCard className="text-lg" />,
     dropdown: [
-      { name: "All Withdrawals", href: "/user/withdrawal-all" },
-      { name: "New Withdrawal", href: "/user/withdrawal-new" },
+      { name: "All Withdrawals", href: "/user/withdrawal-all", icon: <FiCreditCard size={16} /> },
+      { name: "New Withdrawal", href: "/user/withdrawal-new", icon: <FiCreditCard size={16} /> },
     ],
   },
-  { name: "Transactions", href: "/user/transactions", icon: <FiActivity className="mr-2" /> },
+  { 
+    name: "Transactions", 
+    href: "/user/transactions", 
+    icon: <FiActivity className="text-lg" /> 
+  },
 ];
 
 export default function Navbar() {
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const pathname = usePathname();
 
   const toggleMobileMenu = () => {
     setMobileMenuOpen(!mobileMenuOpen);
   };
 
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setActiveDropdown(null);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Close mobile menu on route change
+  useEffect(() => {
+    setMobileMenuOpen(false);
+    setActiveDropdown(null);
+  }, [pathname]);
+
+  const isActiveLink = (href: string) => {
+    return pathname === href;
+  };
+
   return (
     <>
       {/* Desktop Navbar */}
-      <nav className="bg-gray-900 text-gray-100 px-6 lg:px-8 py-3 flex items-center justify-between sticky top-0 z-50">
-        <div className="flex items-center">
-          {/* Mobile Menu Button (hidden on desktop) */}
+      <nav className="bg-white/95 backdrop-blur-md border-b border-gray-200 text-gray-700 px-4 lg:px-8 py-3 flex items-center justify-between sticky top-0 z-50 shadow-sm">
+        <div className="flex items-center flex-1">
+          {/* Mobile Menu Button */}
           <button 
             onClick={toggleMobileMenu}
-            className="lg:hidden mr-4 text-gray-300 hover:text-emerald-400"
+            className="lg:hidden mr-3 p-2 rounded-lg text-gray-600 hover:text-blue-600 hover:bg-gray-100 transition-colors"
           >
-            {mobileMenuOpen ? <FiX size={24} /> : <FiMenu size={24} />}
+            {mobileMenuOpen ? <FiX size={20} /> : <FiMenu size={20} />}
           </button>
 
-          {/* Logo with animation */}
+          {/* Logo */}
           <motion.div 
-  initial={{ opacity: 0, x: -20 }}
-  animate={{ opacity: 1, x: 0 }}
-  transition={{ duration: 0.3 }}
-  className="flex items-center text-lg sm:text-xl md:text-2xl lg:text-3xl xl:text-4xl font-bold text-emerald-400"
->
-  <span className="bg-emerald-500 text-white rounded-lg px-2 sm:px-3 py-0.5 sm:py-1 mr-1 sm:mr-2">
-    C
-  </span>
-  <span className="truncate">hainRise-Partners</span>
-</motion.div>
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.3 }}
+            className="flex items-center text-xl font-bold text-gray-800"
+          >
+            <span className="bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg px-2.5 py-1.5 mr-2 shadow-sm">
+              C
+            </span>
+            <span className="hidden sm:block">hainRise Partners</span>
+          </motion.div>
 
-        </div>
-
-        {/* Desktop Nav Items (hidden on mobile) */}
-        <div className="hidden lg:flex items-center flex-1">
-          <ul className="flex items-center space-x-8 ml-12">
-            {navItems.map((item) => (
-              <li 
-                key={item.name} 
-                className="relative"
-                onMouseEnter={() => item.dropdown && setActiveDropdown(item.name)}
-                onMouseLeave={() => item.dropdown && setActiveDropdown(null)}
-              >
-                {item.dropdown ? (
-                  <>
-                    <button className="flex items-center text-gray-300 hover:text-emerald-400 font-medium transition-colors duration-200 group">
-                      {item.icon}
-                      <span>{item.name}</span>
-                      <motion.span
-                        animate={{ rotate: activeDropdown === item.name ? 180 : 0 }}
-                        transition={{ duration: 0.2 }}
-                        className="ml-1.5"
+          {/* Desktop Nav Items */}
+          <div className="hidden lg:flex items-center flex-1 ml-8" ref={dropdownRef}>
+            <ul className="flex items-center space-x-1">
+              {navItems.map((item) => (
+                <li 
+                  key={item.name} 
+                  className="relative"
+                  onMouseEnter={() => item.dropdown && setActiveDropdown(item.name)}
+                  onMouseLeave={() => item.dropdown && setActiveDropdown(null)}
+                >
+                  {item.dropdown ? (
+                    <>
+                      <button 
+                        className={`flex items-center py-2.5 px-4 rounded-lg font-medium transition-all duration-200 group ${
+                          activeDropdown === item.name 
+                            ? "text-blue-600 bg-blue-50" 
+                            : "text-gray-600 hover:text-blue-600 hover:bg-gray-50"
+                        }`}
                       >
-                        <FiChevronDown className="text-sm group-hover:text-emerald-400" />
-                      </motion.span>
-                    </button>
-                    
-                    <AnimatePresence>
-                      {activeDropdown === item.name && (
-                        <motion.ul
-                          initial={{ opacity: 0, y: 15 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: 15 }}
-                          transition={{ duration: 0.15, ease: "easeOut" }}
-                          className="absolute top-full left-0 mt-1 bg-gray-800 border border-gray-700 rounded-md shadow-xl w-56 z-50 overflow-hidden"
+                        <span className="mr-2 opacity-80">{item.icon}</span>
+                        <span>{item.name}</span>
+                        <motion.span
+                          animate={{ rotate: activeDropdown === item.name ? 180 : 0 }}
+                          transition={{ duration: 0.2 }}
+                          className="ml-1.5 opacity-70"
                         >
-                          {item.dropdown.map((sub) => (
-                            <motion.li 
-                              key={sub.name}
-                              whileHover={{ backgroundColor: "rgba(16, 185, 129, 0.1)" }}
-                              transition={{ duration: 0.1 }}
-                            >
-                              <Link
-                                href={sub.href}
-                                className="flex items-center px-4 py-2.5 text-gray-300 hover:text-emerald-400 transition-colors duration-200 text-sm"
+                          <FiChevronDown size={16} />
+                        </motion.span>
+                      </button>
+                      
+                      <AnimatePresence>
+                        {activeDropdown === item.name && (
+                          <motion.ul
+                            initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                            transition={{ duration: 0.15, ease: "easeOut" }}
+                            className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg w-64 z-50 overflow-hidden py-2"
+                          >
+                            {item.dropdown.map((sub) => (
+                              <motion.li 
+                                key={sub.name}
+                                whileHover={{ backgroundColor: "#f8fafc" }}
+                                transition={{ duration: 0.1 }}
                               >
-                                {sub.name}
-                              </Link>
-                            </motion.li>
-                          ))}
-                        </motion.ul>
-                      )}
-                    </AnimatePresence>
-                  </>
-                ) : (
-                  <Link
-                    href={item.href}
-                    className="flex items-center text-gray-300 hover:text-emerald-400 font-medium transition-colors duration-200"
-                  >
-                    {item.icon}
-                    {item.name}
-                  </Link>
-                )}
-              </li>
-            ))}
-          </ul>
+                                <Link
+                                  href={sub.href}
+                                  className="flex items-center px-4 py-3 text-gray-600 hover:text-blue-600 transition-colors duration-200 text-sm font-medium"
+                                >
+                                  <span className="mr-3 opacity-70">{sub.icon}</span>
+                                  {sub.name}
+                                </Link>
+                              </motion.li>
+                            ))}
+                          </motion.ul>
+                        )}
+                      </AnimatePresence>
+                    </>
+                  ) : (
+                    <Link
+                      href={item.href}
+                      className={`flex items-center py-2.5 px-4 rounded-lg font-medium transition-all duration-200 ${
+                        isActiveLink(item.href)
+                          ? "text-blue-600 bg-blue-50 border border-blue-100"
+                          : "text-gray-600 hover:text-blue-600 hover:bg-gray-50"
+                      }`}
+                    >
+                      <span className="mr-2 opacity-80">{item.icon}</span>
+                      {item.name}
+                    </Link>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
 
         {/* User profile and sign out */}
-        <div className="ml-8 flex items-center space-x-4">
-          <div className="w-9 h-9 rounded-full bg-gray-700 flex items-center justify-center border border-emerald-400/30">
-            <FiUser className="text-emerald-400" />
+        <div className="flex items-center space-x-3">
+          <div className="w-10 h-10 rounded-full bg-gradient-to-r from-blue-500 to-blue-600 flex items-center justify-center shadow-sm">
+            <FiUser className="text-white text-sm" />
           </div>
           <div className="hidden lg:block">
             <SignOutButton />
@@ -214,7 +254,7 @@ export default function Navbar() {
         </div>
       </nav>
 
-      {/* Mobile Menu (slides from left) */}
+      {/* Mobile Menu */}
       <AnimatePresence>
         {mobileMenuOpen && (
           <>
@@ -223,7 +263,7 @@ export default function Navbar() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
-              className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
+              className="fixed inset-0 bg-black bg-opacity-40 z-40 lg:hidden backdrop-blur-sm"
               onClick={toggleMobileMenu}
             />
             
@@ -232,42 +272,46 @@ export default function Navbar() {
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}
               transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-              className="fixed inset-y-0 left-0 w-80 bg-gray-800 z-50 overflow-y-auto"
+              className="fixed inset-y-0 left-0 w-80 bg-white z-50 overflow-y-auto border-r border-gray-200 shadow-xl"
             >
-              <div className="p-4 border-b border-gray-700 flex items-center justify-between">
-                <div className="text-xl font-bold text-emerald-400 flex items-center">
-                  <span className="bg-emerald-500 text-white rounded-lg px-2 py-1 mr-2">C</span>
-                  <span>hainRise-Patners</span>
+              <div className="p-6 border-b border-gray-200 flex items-center justify-between bg-white">
+                <div className="text-xl font-bold text-gray-800 flex items-center">
+                  <span className="bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg px-2.5 py-1.5 mr-3">C</span>
+                  <span>hainRise Partners</span>
                 </div>
                 <button 
                   onClick={toggleMobileMenu}
-                  className="text-gray-300 hover:text-emerald-400"
+                  className="p-2 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
                 >
-                  <FiX size={24} />
+                  <FiX size={20} />
                 </button>
               </div>
 
               <nav className="p-4">
-                <ul className="space-y-2">
+                <ul className="space-y-1">
                   {navItems.map((item) => (
                     <li key={item.name}>
                       {item.dropdown ? (
-                        <div className="mb-2">
+                        <div className="mb-1">
                           <button 
                             onClick={() => setActiveDropdown(
                               activeDropdown === item.name ? null : item.name
                             )}
-                            className="flex items-center justify-between w-full py-3 px-3 text-gray-300 hover:text-emerald-400 rounded-lg hover:bg-gray-700"
+                            className={`flex items-center justify-between w-full py-3 px-4 rounded-lg transition-all duration-200 font-medium ${
+                              activeDropdown === item.name
+                                ? "text-blue-600 bg-blue-50"
+                                : "text-gray-600 hover:text-blue-600 hover:bg-gray-50"
+                            }`}
                           >
                             <div className="flex items-center">
-                              {item.icon}
+                              <span className="mr-3 opacity-80">{item.icon}</span>
                               <span>{item.name}</span>
                             </div>
                             <motion.span
                               animate={{ rotate: activeDropdown === item.name ? 180 : 0 }}
                               transition={{ duration: 0.2 }}
                             >
-                              <FiChevronDown />
+                              <FiChevronDown size={16} />
                             </motion.span>
                           </button>
                           
@@ -278,7 +322,7 @@ export default function Navbar() {
                                 animate={{ opacity: 1, height: 'auto' }}
                                 exit={{ opacity: 0, height: 0 }}
                                 transition={{ duration: 0.2 }}
-                                className="overflow-hidden pl-8"
+                                className="overflow-hidden pl-4 mt-1"
                               >
                                 {item.dropdown.map((sub) => (
                                   <motion.li 
@@ -290,9 +334,9 @@ export default function Navbar() {
                                   >
                                     <Link
                                       href={sub.href}
-                                      onClick={toggleMobileMenu}
-                                      className="block py-2 px-3 text-gray-400 hover:text-emerald-400 hover:bg-gray-700 rounded-lg text-sm"
+                                      className="flex items-center py-2.5 px-4 text-gray-500 hover:text-blue-600 hover:bg-gray-50 rounded-lg text-sm font-medium transition-colors"
                                     >
+                                      <span className="mr-3 opacity-70">{sub.icon}</span>
                                       {sub.name}
                                     </Link>
                                   </motion.li>
@@ -304,17 +348,20 @@ export default function Navbar() {
                       ) : (
                         <Link
                           href={item.href}
-                          onClick={toggleMobileMenu}
-                          className="flex items-center py-3 px-3 text-gray-300 hover:text-emerald-400 rounded-lg hover:bg-gray-700"
+                          className={`flex items-center py-3 px-4 rounded-lg transition-all duration-200 font-medium ${
+                            isActiveLink(item.href)
+                              ? "text-blue-600 bg-blue-50 border border-blue-100"
+                              : "text-gray-600 hover:text-blue-600 hover:bg-gray-50"
+                          }`}
                         >
-                          {item.icon}
-                          <span className="ml-2">{item.name}</span>
+                          <span className="mr-3 opacity-80">{item.icon}</span>
+                          <span>{item.name}</span>
                         </Link>
                       )}
                     </li>
                   ))}
                   {/* Mobile Sign Out Button */}
-                  <li>
+                  <li className="mt-4 pt-4 border-t border-gray-200">
                     <SignOutButton />
                   </li>
                 </ul>

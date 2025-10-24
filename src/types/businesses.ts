@@ -72,12 +72,14 @@ export interface CryptoPaymentOption {
   walletAddress: string;
 }
 
-export type DepositStatus = 'pending' | 'confirmed' | 'completed' | 'failed' | 'cancelled';
+export type DepositStatus = 'pending' | 'rejected '| 'confirmed' | 'completed' | 'failed' | 'cancelled';
 
 export type CryptoType = 'BTC' | 'ETH' | 'BNB' | 'DOGE' | 'SOL' | 'USDT' | 'XRP' | 'LTC';
 
 export interface Deposit {
   id: string;
+  user_id?: string;
+created_at?: string;
   amount: number;
   cryptoType: string; // Changed from CryptoType to string for flexibility
   status: DepositStatus;
@@ -97,6 +99,7 @@ export type WithdrawalStatus =
   | "pending"
   | "processing"
   | "rejected"
+  | "reference"
   | "completed"
   | "cancelled";
 
@@ -285,3 +288,27 @@ export type BanRecord = {
   expires_at: string | null;
   is_active: boolean;
 }
+
+
+
+
+
+
+
+
+// src/types/deposit.ts
+// export type DepositStatus = 
+//   | "pending"
+//   | "completed"
+//   | "failed"
+//   | "rejected"
+//   | "confirmed"
+//   | "cancelled";
+
+// export interface Deposit {
+//   id: string;
+//   user_id: string;
+//   amount: number;
+//   status: DepositStatus;
+//   created_at: string;
+// }
