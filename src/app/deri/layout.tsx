@@ -3,21 +3,61 @@
 import Link from "next/link";
 import { ReactNode, useState } from "react";
 import { AiFillTrademarkCircle } from "react-icons/ai";
-import { FiUsers, FiUpload, FiDownload, FiMenu, FiX, FiHome } from "react-icons/fi";
+import { BsDatabaseCheck } from "react-icons/bs";
+import { FiUsers, FiUpload, FiDownload, FiMenu, FiX, FiHome, FiTrendingUp, FiMail } from "react-icons/fi";
 import { MdAnalytics } from "react-icons/md";
+import { RiUserUnfollowLine } from "react-icons/ri";
  
 export default function AdminLayout({ children }: { children: ReactNode }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const menuItems = [
     // { href: "/deri", label: "Dashboard", icon: MdDashboard },
-    { href: "/deri", label: "All Users", icon: FiUsers },
-    { href: "/deri/deposit", label: "All Deposits", icon: FiUpload },
-    { href: "/deri/deposit-analytics", label: "Deposit Analytics", icon: MdAnalytics },
-    { href: "/deri/email-user", label: "Mail User", icon: MdAnalytics },
-    { href: "/deri/withdrawal", label: "All Withdrawals", icon: FiDownload },
-    { href: "/deri/investment-plans", label: "Investment Plans", icon: AiFillTrademarkCircle },
-    { href: "/deri/ban-delete", label: "Ban/Delete User", icon: FiDownload },
+    {
+    href: "/deri",
+    label: "All Users",
+    icon: FiUsers,
+  },
+  {
+    href: "/deri/deposit",
+    label: "Deposit Request",
+    icon: FiUpload,
+  },
+  {
+    href: "/deri/all-deposit",
+    label: "All Deposits",
+    icon: BsDatabaseCheck, // ✅ represents a verified or completed deposit
+  },
+  {
+    href: "/deri/deposit-analytics",
+    label: "Deposit Analytics",
+    icon: MdAnalytics,
+  },
+  {
+    href: "/deri/email-user",
+    label: "Mail User",
+    icon: FiMail,
+  },
+  {
+    href: "/deri/withdrawal",
+    label: "Withdrawal Request",
+    icon: FiDownload,
+  },
+  {
+    href: "/deri/all-withdrawal",
+    label: "All Withdrawals",
+    icon: FiTrendingUp, // ✅ looks like financial growth/transactions
+  },
+  {
+    href: "/deri/investment-plans",
+    label: "Investment Plans",
+    icon: AiFillTrademarkCircle,
+  },
+  {
+    href: "/deri/ban-delete",
+    label: "Ban/Delete User",
+    icon: RiUserUnfollowLine, // ✅ clearly shows removing or banning a user
+  },
   ];
 
   return (

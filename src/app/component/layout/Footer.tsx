@@ -246,7 +246,7 @@ const Footer = () => {
               <li className="flex items-start gap-3 group hover:text-teal-400 transition-colors">
                 <FaEnvelope className="text-teal-400 mt-1 flex-shrink-0 group-hover:scale-110 transition-transform" />
                 <div>
-                  <div className="font-medium">chainrisepatners@gmail.com</div>
+                  <div className="font-medium">chainrisepartners@gmail.com</div>
                   <div className="text-sm text-gray-400">Quick response</div>
                 </div>
               </li>
