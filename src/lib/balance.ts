@@ -6,45 +6,50 @@ import { redirect } from "next/navigation";
 
 
 export async function getTotalDeposit(): Promise<number> {
-    try {
-      console.log('[getTotalDeposit] Getting user session...');
-      const session = await getSession();
-  
-      if (!session?.user) {
-        console.warn('[getTotalDeposit] No authenticated user found');
-      
-        if (typeof window !== 'undefined') {
-          window.location.href = '/signin';
-        } else {
-          redirect('/signin'); // for use in server-side functions (Next.js App Router only)
-        }
+  try {
+    console.log('[getTotalDeposit] Getting user session...');
+    const session = await getSession();
 
-        return 0;
+    if (!session?.user) {
+      console.warn('[getTotalDeposit] No authenticated user found');
+
+      if (typeof window !== 'undefined') {
+        window.location.href = '/signin';
+      } else {
+        redirect('/signin'); // For Next.js App Router
       }
-  
-      const userId = session.user.id;
-  
-      console.log('[getTotalDeposit] Fetching deposits for user:', userId);
-  
-      const { data: deposits, error } = await supabase
-        .from('chainrise_deposits')
-        .select('amount')
-        .eq('user_id', userId);
-  
-      if (error) {
-        console.error('[getTotalDeposit] Supabase error:', error);
-        return 0;
-      }
-  
-      const total = deposits?.reduce((acc, curr) => acc + Number(curr.amount), 0) || 0;
-      console.log(`[getTotalDeposit] Total deposit: $${total.toFixed(2)}`);
-  
-      return total;
-    } catch (err) {
-      console.error('[getTotalDeposit] Unexpected error:', err);
+
       return 0;
     }
+
+    const userId = session.user.id;
+    console.log('[getTotalDeposit] Fetching completed deposits for user:', userId);
+
+    // ✅ Only fetch deposits where status = 'completed'
+    const { data: deposits, error } = await supabase
+      .from('chainrise_deposits')
+      .select('amount')
+      .eq('user_id', userId)
+      .eq('status', 'completed'); // <-- filter added here
+
+    if (error) {
+      console.error('[getTotalDeposit] Supabase error:', error);
+      return 0;
+    }
+
+    // ✅ Safely calculate total
+    const total =
+      deposits?.reduce((acc, curr) => acc + Number(curr.amount || 0), 0) || 0;
+
+    console.log(`[getTotalDeposit] Total completed deposit: $${total.toFixed(2)}`);
+
+    return total;
+  } catch (err) {
+    console.error('[getTotalDeposit] Unexpected error:', err);
+    return 0;
   }
+}
+
 
 
 

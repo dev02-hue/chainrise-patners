@@ -13,7 +13,7 @@ import { WorkProcess } from "../component/home/WorkProcess";
 // import YouTubeVideo from "../component/home/YouTubeVideo";
 import { advantages } from '@/data/advantages'
 
-import TeamSection from "../component/plan/TeamSection";
+// import TeamSection from "../component/plan/TeamSection";
  
  
 export default function Home() {
@@ -28,7 +28,7 @@ export default function Home() {
   <PricingSection />
   <InvestmentCalculator />
   <WorkProcess />
-  <TeamSection />
+  {/* <TeamSection /> */}
   <TestimonialSection />
   <FAQSection />
   <OurBusinesses />
