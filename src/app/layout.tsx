@@ -3,7 +3,8 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
  
 import LayoutWrapper from "./component/layout/LayoutWrapper";
-import SmartSuppScript from "./component/user/SmartSuppScript";
+ 
+import TawkToScript from "./component/layout/TawkToScript";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -70,7 +71,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-      <SmartSuppScript />
+      <TawkToScript  />
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
