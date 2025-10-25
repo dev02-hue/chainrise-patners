@@ -5,14 +5,14 @@ import LetsDoGreat from '../component/home/LetsDoGreat'
 import AboutUs from '../component/home/AboutUs'
 import Newsletter from '../component/home/Newsletter'
 import { AboutHero } from '../component/about/AboutHero'
-import { advantages } from '@/data/advantages'
+import { advantagess } from '@/data/advantages'
 
 const page = () => {
   return (
     <div>
          <CryptoCurrencyTicker />
         <AboutHero />
-  <OurAdvantage advantages={advantages} />
+  <OurAdvantage advantages={advantagess} />
           <LetsDoGreat />
           <AboutUs />
            <Newsletter />

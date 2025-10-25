@@ -1,6 +1,6 @@
 import { AdvantageItem } from '@/types/advantages';
 
-export const advantages: AdvantageItem[] = [
+export const advantagess: AdvantageItem[] = [
   {
     id: 'expert-management',
     title: "Expert Management Team",
@@ -21,7 +21,7 @@ export const advantages: AdvantageItem[] = [
     description: "ChainRise-Patners offers a unique advantage through its diversified investment portfolio that spans across real estate, agriculture, crypto mining, and stock trading. This multi-sector approach reduces risk while providing multiple streams of potential returns.",
     media: {
       type: 'video',
-      src: "https://www.youtube.com/embed/C_3OktZlpSA",
+      src: "https://www.youtube.com/embed/LGHsNaIv5os",
       alt: "Diversified investment portfolio visualization"
     }
   },
