@@ -9,6 +9,7 @@ import { MdAnalytics } from "react-icons/md";
 import { RiUserUnfollowLine } from "react-icons/ri";
  
 export default function AdminLayout({ children }: { children: ReactNode }) {
+  
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const menuItems = [
