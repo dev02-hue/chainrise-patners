@@ -49,6 +49,8 @@ const AdminDashboard = () => {
 
   const fetchUsers = async () => {
     try {
+
+      
       setLoading(true);
       const { data: usersData, error, count } = await getAllUsersWithMetrics({
         search: search || undefined,

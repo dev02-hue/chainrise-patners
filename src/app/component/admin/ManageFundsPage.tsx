@@ -4,8 +4,29 @@
 import React, { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { toast } from "sonner";
-import { FaUser, FaEnvelope, FaPhone, FaDollarSign, FaPlus } from "react-icons/fa";
-import { getUserMetrics, adminFundUser, getAdminSession } from "@/lib/adminauth";
+import { 
+  FaUser, 
+  FaEnvelope, 
+  FaPhone, 
+  FaDollarSign, 
+  FaPlus, 
+  FaEdit, 
+  FaSave, 
+  FaTimes,
+  FaSpinner,
+  FaHistory,
+  FaChartLine,
+  FaMoneyBillWave,
+  FaCoins,
+  FaExclamationTriangle,
+  FaCheckCircle
+} from "react-icons/fa";
+import { 
+  getUserMetrics, 
+  adminFundUser, 
+  getAdminSession, 
+  updateUserProfile 
+} from "@/lib/adminauth";
 
 interface UserMetrics {
   username: string;
@@ -23,6 +44,14 @@ interface UserMetrics {
   referral_commission: number;
 }
 
+interface FundingFormData {
+  amount: string;
+  cryptoType: string;
+  transactionType: "bonus" | "deposit" | "refund" | "correction";
+  description: string;
+  sendEmailNotification: boolean;
+}
+
 const ManageFundsPage = () => {
   const router = useRouter();
   const params = useParams();
@@ -30,31 +59,62 @@ const ManageFundsPage = () => {
   
   const [metrics, setMetrics] = useState<UserMetrics | null>(null);
   const [loading, setLoading] = useState(true);
+  const [fundingLoading, setFundingLoading] = useState(false);
+  const [updatingField, setUpdatingField] = useState<string | null>(null);
   const [showFundingForm, setShowFundingForm] = useState(false);
-  const [fundingData, setFundingData] = useState({
+  const [editingField, setEditingField] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState<string>("");
+  const [adminId, setAdminId] = useState<string>("");
+  
+  const [fundingData, setFundingData] = useState<FundingFormData>({
     amount: "",
     cryptoType: "BTC",
-    transactionType: "bonus" as "bonus" | "deposit" | "refund" | "correction",
+    transactionType: "bonus",
     description: "",
     sendEmailNotification: true
   });
 
   useEffect(() => {
+    fetchAdminSession();
     fetchUserMetrics();
   }, [userId]);
 
+  const fetchAdminSession = async () => {
+    try {
+      const session = await getAdminSession();
+      if (session.admin?.id) {
+        setAdminId(session.admin.id);
+      } else {
+        toast.error("Admin session expired. Please log in again.");
+        router.push('/signin');
+      }
+    } catch (error) {
+      console.error("Error fetching admin session:", error);
+      toast.error("Authentication failed");
+    }
+  };
+
   const fetchUserMetrics = async () => {
     try {
+      setLoading(true);
       const { data: metricsData, error } = await getUserMetrics(userId);
+      
       if (error) {
-        toast.error(error);
+        toast.error(`Failed to load user data: ${error}`);
         router.back();
         return;
       }
-      setMetrics(metricsData || null);
+      
+      if (!metricsData) {
+        toast.error("User data not found");
+        router.back();
+        return;
+      }
+      
+      setMetrics(metricsData);
     } catch (error) {
       console.error("Error fetching user metrics:", error);
-      toast.error("Failed to load user metrics");
+      toast.error("Failed to load user metrics. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -66,29 +126,40 @@ const ManageFundsPage = () => {
 
   const handleFundUser = async () => {
     if (!fundingData.amount || parseFloat(fundingData.amount) <= 0) {
-      toast.error("Please enter a valid amount");
+      toast.error("Please enter a valid amount greater than 0");
       return;
     }
 
-    try {
-      const session = await getAdminSession();
-      if (!session.admin) {
-        toast.error("Admin session expired");
-        return;
-      }
+    if (!fundingData.description.trim()) {
+      toast.error("Please provide a description for this transaction");
+      return;
+    }
 
-      const { success, error } = await adminFundUser({
+    if (!adminId) {
+      toast.error("Admin authentication required");
+      return;
+    }
+
+    setFundingLoading(true);
+
+    try {
+      const result = await adminFundUser({
         userId,
         amount: parseFloat(fundingData.amount),
         cryptoType: fundingData.cryptoType,
         transactionType: fundingData.transactionType,
         description: fundingData.description,
         sendEmailNotification: fundingData.sendEmailNotification,
-        adminId: session.admin.id
+        adminId: adminId
       });
 
-      if (success) {
-        toast.success("Funds added successfully");
+      if (result.success) {
+        toast.success(
+          `Successfully added $${fundingData.amount} ${fundingData.transactionType} to user account`,
+          {
+            description: fundingData.description
+          }
+        );
         setShowFundingForm(false);
         setFundingData({
           amount: "",
@@ -97,203 +168,432 @@ const ManageFundsPage = () => {
           description: "",
           sendEmailNotification: true
         });
-        fetchUserMetrics(); // Refresh metrics
+        await fetchUserMetrics(); // Refresh metrics
       } else {
-        toast.error(error || "Failed to add funds");
+        toast.error(result.error || "Failed to add funds. Please try again.");
       }
     } catch (error) {
       console.error("Error funding user:", error);
-      toast.error("Failed to add funds");
+      toast.error("An unexpected error occurred while adding funds");
+    } finally {
+      setFundingLoading(false);
     }
+  };
+
+  const startEditing = (field: string, currentValue: number) => {
+    setEditingField(field);
+    setEditValue(currentValue.toString());
+  };
+
+  const cancelEditing = () => {
+    setEditingField(null);
+    setEditValue("");
+  };
+
+  const saveEdit = async () => {
+    if (!editingField || !metrics || !adminId) return;
+
+    const numericValue = parseFloat(editValue);
+    if (isNaN(numericValue) || numericValue < 0) {
+      toast.error("Please enter a valid positive number");
+      return;
+    }
+
+    setUpdatingField(editingField);
+
+    try {
+      // Map the field names to match your database schema
+      const fieldMap: { [key: string]: string } = {
+        balance: "balance",
+        total_earnings: "total_earnings",
+        total_bonus: "total_bonus",
+        total_penalty: "total_penalty",
+        referral_commission: "referral_commission"
+      };
+
+      const dbField = fieldMap[editingField];
+      if (!dbField) {
+        toast.error("This field cannot be edited directly");
+        return;
+      }
+
+      // Update the user profile
+      const { success, error } = await updateUserProfile({
+        id: userId,
+        [dbField]: numericValue
+      } as any);
+
+      if (success) {
+        toast.success(
+          `${editingField.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')} updated successfully`
+        );
+        setMetrics({
+          ...metrics,
+          [editingField]: numericValue
+        });
+        cancelEditing();
+      } else {
+        toast.error(error || `Failed to update ${editingField.replace('_', ' ')}`);
+      }
+    } catch (error) {
+      console.error("Error updating field:", error);
+      toast.error("Failed to update field. Please try again.");
+    } finally {
+      setUpdatingField(null);
+    }
+  };
+
+  const formatCurrency = (amount: number): string => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(amount);
+  };
+
+  const getMetricColor = (key: string): string => {
+    const colors: { [key: string]: string } = {
+      balance: "text-green-600 bg-green-50 border-green-200",
+      funded: "text-blue-600 bg-blue-50 border-blue-200",
+      active_deposit: "text-purple-600 bg-purple-50 border-purple-200",
+      total_earnings: "text-emerald-600 bg-emerald-50 border-emerald-200",
+      total_withdrawal: "text-orange-600 bg-orange-50 border-orange-200",
+      pending_withdrawal: "text-yellow-600 bg-yellow-50 border-yellow-200",
+      total_bonus: "text-indigo-600 bg-indigo-50 border-indigo-200",
+      total_penalty: "text-red-600 bg-red-50 border-red-200",
+      referral_commission: "text-teal-600 bg-teal-50 border-teal-200",
+    };
+    return colors[key] || "text-gray-600 bg-gray-50 border-gray-200";
+  };
+
+  const getMetricIcon = (key: string) => {
+    const icons: { [key: string]: React.ReactNode } = {
+      balance: <FaMoneyBillWave className="text-lg" />,
+      funded: <FaCoins className="text-lg" />,
+      active_deposit: <FaChartLine className="text-lg" />,
+      total_earnings: <FaDollarSign className="text-lg" />,
+      total_withdrawal: <FaHistory className="text-lg" />,
+      pending_withdrawal: <FaExclamationTriangle className="text-lg" />,
+      total_bonus: <FaCheckCircle className="text-lg" />,
+      total_penalty: <FaExclamationTriangle className="text-lg" />,
+      referral_commission: <FaUser className="text-lg" />,
+    };
+    return icons[key] || <FaDollarSign className="text-lg" />;
   };
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-emerald-500"></div>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-emerald-500 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading user data...</p>
+        </div>
       </div>
     );
   }
 
   if (!metrics) {
-    return <div>User not found</div>;
-  }
-
-  return (
-    <div className="max-w-6xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-gray-800">Manage User Funds</h2>
-        <button
-          onClick={() => router.back()}
-          className="px-4 py-2 text-gray-600 hover:text-gray-800"
-        >
-          ← Back
-        </button>
-      </div>
-
-      {/* User Info Table */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-lg font-semibold mb-4">User Information</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
-            <FaUser className="text-gray-400" />
-            <div>
-              <p className="text-sm text-gray-600">Username</p>
-              <p className="font-medium">{metrics.username}</p>
-            </div>
-          </div>
-          <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
-            <FaEnvelope className="text-gray-400" />
-            <div>
-              <p className="text-sm text-gray-600">Email</p>
-              <p className="font-medium">{metrics.email}</p>
-            </div>
-          </div>
-          <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
-            <FaPhone className="text-gray-400" />
-            <div>
-              <p className="text-sm text-gray-600">Status</p>
-              <p className={`font-medium ${metrics.is_active ? 'text-green-600' : 'text-red-600'}`}>
-                {metrics.is_active ? 'Active' : 'Inactive'}
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Financial Metrics Table */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-semibold">Financial Metrics</h3>
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-red-600 text-xl mb-2">User Not Found</div>
+          <p className="text-gray-600 mb-4">The requested user could not be found.</p>
           <button
-            onClick={handleAddBonus}
-            className="flex items-center space-x-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
+            onClick={() => router.back()}
+            className="px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
           >
-            <FaPlus />
-            <span>Add Bonus</span>
+            Go Back
           </button>
         </div>
+      </div>
+    );
+  }
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {[
-            { label: "Balance", value: metrics.balance, icon: FaDollarSign, color: "text-green-600" },
-            { label: "Total Deposit", value: metrics.funded, icon: FaDollarSign, color: "text-blue-600" },
-            { label: "Active Deposit", value: metrics.active_deposit, icon: FaDollarSign, color: "text-purple-600" },
-            { label: "Total Earnings", value: metrics.total_earnings, icon: FaDollarSign, color: "text-green-600" },
-            { label: "Total Withdrawal", value: metrics.total_withdrawal, icon: FaDollarSign, color: "text-orange-600" },
-            { label: "Pending Withdrawal", value: metrics.pending_withdrawal, icon: FaDollarSign, color: "text-yellow-600" },
-            { label: "Total Bonus", value: metrics.total_bonus, icon: FaDollarSign, color: "text-indigo-600" },
-            { label: "Total Penalty", value: metrics.total_penalty, icon: FaDollarSign, color: "text-red-600" },
-            { label: "Referral Commission", value: metrics.referral_commission, icon: FaDollarSign, color: "text-teal-600" },
-          ].map((metric, index) => (
-            <div key={index} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
-              <div className="flex items-center space-x-3">
-                <metric.icon className={`${metric.color}`} />
-                <div>
-                  <p className="text-sm text-gray-600">{metric.label}</p>
-                  <p className="font-semibold">${metric.value.toFixed(2)}</p>
-                </div>
+  const editableFields = [
+    { key: "balance", label: "Current Balance", value: metrics.balance, editable: true },
+    { key: "funded", label: "Total Deposited", value: metrics.funded, editable: false },
+    { key: "active_deposit", label: "Active Investments", value: metrics.active_deposit, editable: false },
+    { key: "total_earnings", label: "Total Earnings", value: metrics.total_earnings, editable: true },
+    { key: "total_withdrawal", label: "Total Withdrawn", value: metrics.total_withdrawal, editable: false },
+    { key: "pending_withdrawal", label: "Pending Withdrawal", value: metrics.pending_withdrawal, editable: false },
+    { key: "total_bonus", label: "Total Bonus", value: metrics.total_bonus, editable: true },
+    { key: "total_penalty", label: "Total Penalty", value: metrics.total_penalty, editable: true },
+    { key: "referral_commission", label: "Referral Commission", value: metrics.referral_commission, editable: true },
+  ];
+
+  return (
+    <div className="min-h-screen bg-gray-50 py-8">
+      <div className="max-w-7xl mx-auto space-y-6 px-4 sm:px-6 lg:px-8">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Fund Management</h1>
+            <p className="text-gray-600 mt-1">
+              Managing funds for <span className="font-semibold">{metrics.username}</span>
+            </p>
+          </div>
+          <div className="flex gap-3">
+            <button
+              onClick={() => router.back()}
+              className="px-4 py-2 text-gray-700 hover:text-gray-900 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              ← Back to Users
+            </button>
+            <button
+              onClick={handleAddBonus}
+              disabled={fundingLoading}
+              className="flex items-center gap-2 px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              <FaPlus />
+              <span>Add Funds</span>
+            </button>
+          </div>
+        </div>
+
+        {/* User Info Card */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">User Information</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="flex items-center space-x-4 p-4 bg-gray-50 rounded-lg">
+              <div className="p-3 bg-blue-100 rounded-full">
+                <FaUser className="text-blue-600 text-xl" />
               </div>
-              <button className="text-blue-600 hover:text-blue-800 text-sm">
-                Edit
+              <div>
+                <p className="text-sm text-gray-600 font-medium">Username</p>
+                <p className="text-lg font-semibold text-gray-900">{metrics.username}</p>
+              </div>
+            </div>
+            <div className="flex items-center space-x-4 p-4 bg-gray-50 rounded-lg">
+              <div className="p-3 bg-green-100 rounded-full">
+                <FaEnvelope className="text-green-600 text-xl" />
+              </div>
+              <div>
+                <p className="text-sm text-gray-600 font-medium">Email</p>
+                <p className="text-lg font-semibold text-gray-900">{metrics.email}</p>
+              </div>
+            </div>
+            <div className="flex items-center space-x-4 p-4 bg-gray-50 rounded-lg">
+              <div className="p-3 bg-purple-100 rounded-full">
+                <FaPhone className="text-purple-600 text-xl" />
+              </div>
+              <div>
+                <p className="text-sm text-gray-600 font-medium">Account Status</p>
+                <p className={`text-lg font-semibold ${metrics.is_active ? 'text-green-600' : 'text-red-600'}`}>
+                  {metrics.is_active ? 'Active' : 'Inactive'}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Financial Metrics Grid */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
+            <h2 className="text-xl font-semibold text-gray-900">Financial Overview</h2>
+            <div className="flex items-center gap-2 mt-2 sm:mt-0">
+              <span className="text-sm text-gray-500">Last updated: Just now</span>
+              <button
+                onClick={fetchUserMetrics}
+                className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                title="Refresh data"
+              >
+                <FaSpinner className={`text-sm ${loading ? 'animate-spin' : ''}`} />
               </button>
             </div>
-          ))}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {editableFields.map((metric) => (
+              <div 
+                key={metric.key} 
+                className={`p-4 border-2 rounded-xl transition-all duration-200 hover:shadow-md ${getMetricColor(metric.key)}`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3 flex-1">
+                    <div className="p-2 rounded-lg bg-white">
+                      {getMetricIcon(metric.key)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-600 truncate">
+                        {metric.label}
+                      </p>
+                      {editingField === metric.key ? (
+                        <input
+                          type="number"
+                          value={editValue}
+                          onChange={(e) => setEditValue(e.target.value)}
+                          className="w-full px-2 py-1 border border-gray-300 rounded text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                          step="0.01"
+                          min="0"
+                          autoFocus
+                        />
+                      ) : (
+                        <p className="text-lg font-bold truncate">
+                          {formatCurrency(metric.value)}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {metric.editable ? (
+                    editingField === metric.key ? (
+                      <div className="flex space-x-1 ml-2">
+                        <button
+                          onClick={saveEdit}
+                          disabled={updatingField === metric.key}
+                          className="p-1.5 text-green-600 hover:text-green-800 hover:bg-green-50 rounded transition-colors disabled:opacity-50"
+                          title="Save changes"
+                        >
+                          {updatingField === metric.key ? (
+                            <FaSpinner className="animate-spin" />
+                          ) : (
+                            <FaSave size={14} />
+                          )}
+                        </button>
+                        <button
+                          onClick={cancelEditing}
+                          className="p-1.5 text-red-600 hover:text-red-800 hover:bg-red-50 rounded transition-colors"
+                          title="Cancel editing"
+                        >
+                          <FaTimes size={14} />
+                        </button>
+                      </div>
+                    ) : (
+                      <button 
+                        onClick={() => startEditing(metric.key, metric.value)}
+                        className="p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-colors ml-2"
+                        title="Edit value"
+                      >
+                        <FaEdit size={14} />
+                      </button>
+                    )
+                  ) : (
+                    <span className="text-xs text-gray-400 px-2 py-1 bg-white rounded border ml-2">
+                      Auto
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
       {/* Funding Form Modal */}
       {showFundingForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <h3 className="text-lg font-semibold mb-4">Add Funds to User</h3>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md transform transition-all">
+            <div className="p-6 border-b border-gray-200">
+              <h3 className="text-xl font-semibold text-gray-900">Add Funds</h3>
+              <p className="text-gray-600 text-sm mt-1">
+                Add funds to {metrics.username}&apos;s account
+              </p>
+            </div>
             
-            <div className="space-y-4">
+            <div className="p-6 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Amount ($)
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Amount (USD)
                 </label>
                 <input
                   type="number"
                   value={fundingData.amount}
                   onChange={(e) => setFundingData({ ...fundingData, amount: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  placeholder="Enter amount"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-colors"
+                  placeholder="0.00"
                   step="0.01"
+                  min="0.01"
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Crypto Type
-                </label>
-                <select
-                  value={fundingData.cryptoType}
-                  onChange={(e) => setFundingData({ ...fundingData, cryptoType: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                >
-                  <option value="BTC">Bitcoin (BTC)</option>
-                  <option value="ETH">Ethereum (ETH)</option>
-                  <option value="BNB">Binance Coin (BNB)</option>
-                  <option value="DOGE">Dogecoin (DOGE)</option>
-                  <option value="SOL">Solana (SOL)</option>
-                  <option value="USDT">USDT (TRC20)</option>
-                </select>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Crypto Type
+                  </label>
+                  <select
+                    value={fundingData.cryptoType}
+                    onChange={(e) => setFundingData({ ...fundingData, cryptoType: e.target.value })}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-colors"
+                  >
+                    <option value="BTC">Bitcoin (BTC)</option>
+                    <option value="ETH">Ethereum (ETH)</option>
+                    <option value="BNB">Binance Coin (BNB)</option>
+                    <option value="DOGE">Dogecoin (DOGE)</option>
+                    <option value="SOL">Solana (SOL)</option>
+                    <option value="USDT">USDT (TRC20)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Type
+                  </label>
+                  <select
+                    value={fundingData.transactionType}
+                    onChange={(e) => setFundingData({ ...fundingData, transactionType: e.target.value as any })}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-colors"
+                  >
+                    <option value="bonus">Bonus</option>
+                    <option value="deposit">Deposit</option>
+                    <option value="refund">Refund</option>
+                    <option value="correction">Correction</option>
+                  </select>
+                </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Transaction Type
-                </label>
-                <select
-                  value={fundingData.transactionType}
-                  onChange={(e) => setFundingData({ ...fundingData, transactionType: e.target.value as any })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                >
-                  <option value="bonus">Bonus</option>
-                  <option value="deposit">Deposit</option>
-                  <option value="refund">Refund</option>
-                  <option value="correction">Correction</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Description
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Description / Reason
                 </label>
                 <textarea
                   value={fundingData.description}
                   onChange={(e) => setFundingData({ ...fundingData, description: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  placeholder="Reason for funding..."
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-colors resize-none"
+                  placeholder="Provide a reason for this transaction..."
                   rows={3}
                 />
               </div>
 
-              <div className="flex items-center">
+              <div className="flex items-center p-3 bg-gray-50 rounded-lg">
                 <input
                   type="checkbox"
+                  id="emailNotification"
                   checked={fundingData.sendEmailNotification}
                   onChange={(e) => setFundingData({ ...fundingData, sendEmailNotification: e.target.checked })}
-                  className="mr-2"
+                  className="h-4 w-4 text-emerald-600 focus:ring-emerald-500 border-gray-300 rounded"
                 />
-                <label className="text-sm text-gray-700">Send email notification to user</label>
+                <label htmlFor="emailNotification" className="ml-3 text-sm text-gray-700">
+                  Send email notification to user
+                </label>
               </div>
             </div>
 
-            <div className="flex justify-end space-x-3 mt-6">
+            <div className="flex justify-end space-x-3 p-6 border-t border-gray-200 bg-gray-50 rounded-b-xl">
               <button
                 onClick={() => setShowFundingForm(false)}
-                className="px-4 py-2 text-gray-600 hover:text-gray-800"
+                disabled={fundingLoading}
+                className="px-6 py-2.5 text-gray-700 hover:text-gray-900 border border-gray-300 rounded-lg hover:bg-white disabled:opacity-50 transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleFundUser}
-                className="px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700"
+                disabled={fundingLoading || !fundingData.amount || !fundingData.description.trim()}
+                className="flex items-center gap-2 px-6 py-2.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
-                Add Funds
+                {fundingLoading ? (
+                  <>
+                    <FaSpinner className="animate-spin" />
+                    <span>Processing...</span>
+                  </>
+                ) : (
+                  <>
+                    <FaPlus />
+                    <span>Add Funds</span>
+                  </>
+                )}
               </button>
             </div>
           </div>
