@@ -302,7 +302,7 @@ export async function signIn({ emailOrUsername, password }: SignInInput) {
       // Lookup email by username
       const { data: profile, error: profileError } = await supabase
         .from('chainrise_profile')
-        .select('email')
+        .select('email, is_admin')
         .eq('username', emailOrUsername)
         .single()
 
@@ -323,20 +323,34 @@ export async function signIn({ emailOrUsername, password }: SignInInput) {
       return { error: 'Invalid credentials' }
     }
 
-    // 4. Handle session
+    // 4. Get user profile to check admin status
+    const { data: userProfile, error: profileError } = await supabase
+      .from('chainrise_profile')
+      .select('id, username, is_admin, name, email')
+      .eq('id', data.user?.id)
+      .single()
+
+    if (profileError || !userProfile) {
+      console.error('Profile fetch error:', profileError)
+      return { error: 'Failed to load user profile' }
+    }
+
+    // 5. Handle session
     const sessionToken = data.session?.access_token
     const refreshToken = data.session?.refresh_token
     const userId = data.user?.id
+    const isAdmin = userProfile.is_admin
 
     if (!sessionToken || !refreshToken || !userId) {
       console.error('Incomplete session data')
       return { error: 'Failed to create session' }
     }
 
-    // 5. Set cookies
+    // 6. Set cookies with unique names based on user type
     const cookieStore = await cookies()
     const oneYear = 31536000 // 1 year in seconds
 
+    // Common auth cookies
     cookieStore.set('sb-access-token', sessionToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
@@ -353,7 +367,7 @@ export async function signIn({ emailOrUsername, password }: SignInInput) {
       sameSite: 'lax',
     })
 
-    cookieStore.set('user_id', userId, {
+    cookieStore.set('user-id', userId, {
       httpOnly: false,
       secure: process.env.NODE_ENV === 'production',
       maxAge: oneYear,
@@ -361,33 +375,131 @@ export async function signIn({ emailOrUsername, password }: SignInInput) {
       sameSite: 'lax',
     })
 
-    // Get username to store in cookie
-    const { data: userProfile } = await supabase
-      .from('chainrise_profile')
-      .select('username')
-      .eq('id', userId)
-      .single()
+    // User-specific cookies
+    cookieStore.set('user-username', userProfile.username, {
+      httpOnly: false,
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: oneYear,
+      path: '/',
+      sameSite: 'lax',
+    })
 
-    if (userProfile?.username) {
-      cookieStore.set('username', userProfile.username, {
+    cookieStore.set('user-name', userProfile.name || '', {
+      httpOnly: false,
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: oneYear,
+      path: '/',
+      sameSite: 'lax',
+    })
+
+    cookieStore.set('user-email', userProfile.email, {
+      httpOnly: false,
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: oneYear,
+      path: '/',
+      sameSite: 'lax',
+    })
+
+    // Admin-specific cookie (only set if user is admin)
+    if (isAdmin) {
+      cookieStore.set('user-is-admin', 'true', {
         httpOnly: false,
         secure: process.env.NODE_ENV === 'production',
         maxAge: oneYear,
         path: '/',
         sameSite: 'lax',
       })
+    } else {
+      // Ensure admin cookie is cleared for regular users
+      cookieStore.delete('user-is-admin')
     }
+
+    // Set authentication status
+    cookieStore.set('user-authenticated', 'true', {
+      httpOnly: false,
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: oneYear,
+      path: '/',
+      sameSite: 'lax',
+    })
 
     return {
       user: data.user,
       session: data.session,
-      message: 'Login successful'
+      isAdmin: isAdmin,
+      message: 'Login successful',
+      redirectTo: isAdmin ? '/deri' : '/user/dashboard'
     }
   } catch (err) {
     console.error('Unexpected login error:', err)
     return { error: 'An unexpected error occurred' }
   }
 }
+
+// Add these to your existing userauth.ts file
+
+// Helper function to check if user is admin
+export async function isUserAdmin(): Promise<boolean> {
+  try {
+    const cookieStore = await cookies();
+    const isAdmin = cookieStore.get('user-is-admin')?.value;
+    return isAdmin === 'true';
+  } catch (err) {
+    console.error('Error checking admin status:', err);
+    return false;
+  }
+}
+
+// Helper function to get user session
+export async function getUserSession() {
+  try {
+    const cookieStore = await cookies();
+    const userId = cookieStore.get('user-id')?.value;
+    const isAuthenticated = cookieStore.get('user-authenticated')?.value;
+    const isAdmin = cookieStore.get('user-is-admin')?.value === 'true';
+
+    if (!userId || isAuthenticated !== 'true') {
+      return { isAuthenticated: false, user: null, isAdmin: false };
+    }
+
+    return {
+      isAuthenticated: true,
+      isAdmin,
+      user: {
+        id: userId,
+        username: cookieStore.get('user-username')?.value,
+        name: cookieStore.get('user-name')?.value,
+        email: cookieStore.get('user-email')?.value,
+      }
+    };
+  } catch (err) {
+    console.error('Error getting user session:', err);
+    return { isAuthenticated: false, user: null, isAdmin: false };
+  }
+}
+
+// Route protection for admin routes
+export async function requireAdminAuth() {
+  const { isAuthenticated, isAdmin } = await getUserSession();
+  
+  if (!isAuthenticated) {
+    redirect('/signin');
+  }
+  
+  if (!isAdmin) {
+    redirect('/user/dashboard');
+  }
+}
+
+// Route protection for user routes
+export async function requireUserAuth() {
+  const { isAuthenticated } = await getUserSession();
+  
+  if (!isAuthenticated) {
+    redirect('/signin');
+  }
+}
+
 
 export async function resetPassword({ email }: ResetPasswordInput) {
   try {

@@ -1,156 +1,115 @@
+// components/admin/AdminDashboard.tsx
 "use client";
 import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { motion } from "framer-motion";
+import { toast } from "sonner";
 import { 
   FaEdit, 
-  FaSave, 
-  FaTimes, 
-  FaUser, 
-  FaEnvelope, 
-  FaPhone, 
-  FaDollarSign,
-  FaUsers,
+  FaTrash, 
+  FaDollarSign, 
+  FaUser,
+ 
+  FaCalendar,
   FaChartLine,
   FaMoneyBillWave,
   FaPiggyBank
 } from "react-icons/fa";
-import { motion } from "framer-motion";
-import { toast } from "sonner";
- 
-import {
-  LineChart,
-  Line,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-  
-} from 'recharts';
-import { getAllProfiles, getEarningsAnalytics, getPlatformStats, updateUserProfile } from "@/lib/getProfileData";
+import { getAllUsersWithMetrics, adminSoftDeleteUser, getAdminSession } from "@/lib/adminauth";
 
-interface EditableProfile {
+interface UserWithMetrics {
   id: string;
-  name: string;
   username: string;
   email: string;
-  phoneNumber: string;
+  created_at: string;
+  is_active: boolean;
   balance: number;
-  isEditing?: boolean;
+  funded: number;
+  earned: number;
+  active_deposit: number;
+  total_withdrawal: number;
+  pending_withdrawal: number;
+  total_bonus: number;
+  total_penalty: number;
+  referral_commission: number;
 }
 
-interface PlatformStats {
-  totalBalance: number;
-  totalEarnings: number;
-  totalInvested: number;
-  activeUsers: number;
-  totalUsers: number;
-}
-
-interface EarningsData {
-  weekly: { date: string; earnings: number }[];
-  monthly: { month: string; earnings: number }[];
-  yearly: { year: string; earnings: number }[];
-}
-
-const UserProfileManagement = () => {
-  const [profiles, setProfiles] = useState<EditableProfile[]>([]);
-  const [platformStats, setPlatformStats] = useState<PlatformStats | null>(null);
-  const [earningsData, setEarningsData] = useState<EarningsData | null>(null);
+const AdminDashboard = () => {
+  const router = useRouter();
+  const [users, setUsers] = useState<UserWithMetrics[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'profiles' | 'analytics'>('profiles');
+  const [search, setSearch] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const itemsPerPage = 10;
 
   useEffect(() => {
-    fetchAllData();
-  }, []);
+    fetchUsers();
+  }, [currentPage, search]);
 
-  const fetchAllData = async () => {
+  const fetchUsers = async () => {
     try {
       setLoading(true);
-      
-      // Fetch profiles
-      const { data: profilesData, error: profilesError } = await getAllProfiles();
-      if (profilesError) {
-        setError(profilesError);
+      const { data: usersData, error, count } = await getAllUsersWithMetrics({
+        search: search || undefined,
+        limit: itemsPerPage,
+        offset: (currentPage - 1) * itemsPerPage
+      });
+
+      if (error) {
+        toast.error(error);
         return;
       }
 
-      // Fetch platform stats
-      const { data: stats, error: statsError } = await getPlatformStats();
-      if (statsError) {
-        console.error('Stats error:', statsError);
+      if (usersData) {
+        setUsers(usersData);
+        setTotalCount(count || 0);
       }
-
-      // Fetch earnings analytics
-      const { data: earnings, error: earningsError } = await getEarningsAnalytics();
-      if (earningsError) {
-        console.error('Earnings error:', earningsError);
-      }
-
-      if (profilesData) {
-        setProfiles(profilesData.map(profile => ({ 
-          ...profile, 
-          isEditing: false 
-        })));
-      }
-      
-      if (stats) {
-        setPlatformStats(stats);
-      }
-      
-      if (earnings) {
-        setEarningsData(earnings);
-      }
-
     } catch (err) {
-      console.error("Error fetching data:", err);
-      setError("Failed to load data");
+      console.error("Error fetching users:", err);
+      toast.error("Failed to load users");
     } finally {
       setLoading(false);
     }
   };
 
-  const toggleEdit = (id: string) => {
-    setProfiles(profiles.map(profile => 
-      profile.id === id ? { ...profile, isEditing: !profile.isEditing } : profile
-    ));
+  const handleEdit = (userId: string) => {
+    router.push(`/deri/users/${userId}/edit`);
   };
 
-  const handleChange = (id: string, field: keyof EditableProfile, value: string | number) => {
-    setProfiles(profiles.map(profile => 
-      profile.id === id ? { ...profile, [field]: value } : profile
-    ));
-  };
+  const handleDelete = async (userId: string) => {
+    if (!confirm("Are you sure you want to delete this user? This action can be reversed.")) return;
 
-  const handleUpdate = async (profile: EditableProfile) => {
     try {
-      const { success, error } = await updateUserProfile({
-        id: profile.id,
-        name: profile.name,
-        username: profile.username,
-        email: profile.email,
-        phoneNumber: profile.phoneNumber,
-        balance: profile.balance
+      const session = await getAdminSession();
+      if (!session.admin) {
+        toast.error("Admin session expired");
+        return;
+      }
+
+      const { success, error } = await adminSoftDeleteUser({
+        userId,
+        adminId: session.admin.id,
+        reason: "Admin manual deletion"
       });
 
       if (success) {
-        toast.success("Profile updated successfully");
-        toggleEdit(profile.id);
-        fetchAllData(); // Refresh all data
+        toast.success("User deleted successfully");
+        fetchUsers(); // Refresh the list
       } else {
-        toast.error(error || "Failed to update profile");
+        toast.error(error || "Failed to delete user");
       }
-    } catch (err) {
-      console.error("Error updating profile:", err);
-      toast.error("An unexpected error occurred");
+    } catch (error) {
+      console.error("Delete failed:", error);
+      toast.error("Failed to delete user");
     }
   };
 
-  // Colors for charts
-  // const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
+  const handleManageFunds = (userId: string) => {
+    router.push(`/deri/users/${userId}/funds`);
+  };
+
+  const totalPages = Math.ceil(totalCount / itemsPerPage);
 
   if (loading) {
     return (
@@ -160,174 +119,144 @@ const UserProfileManagement = () => {
     );
   }
 
-  if (error) {
-    return (
-      <div className="bg-red-50 text-red-700 p-4 rounded-md">
-        {error}
-        <button 
-          onClick={fetchAllData}
-          className="ml-4 px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700"
-        >
-          Retry
-        </button>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-gray-800">User Management & Analytics</h2>
-        <div className="flex space-x-2">
-          <button
-            onClick={() => setActiveTab('profiles')}
-            className={`px-4 py-2 rounded-lg transition-colors ${
-              activeTab === 'profiles' 
-                ? 'bg-emerald-600 text-white' 
-                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-            }`}
-          >
-            User Profiles
-          </button>
-          <button
-            onClick={() => setActiveTab('analytics')}
-            className={`px-4 py-2 rounded-lg transition-colors ${
-              activeTab === 'analytics' 
-                ? 'bg-emerald-600 text-white' 
-                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-            }`}
-          >
-            Platform Analytics
-          </button>
+        <h2 className="text-2xl font-bold text-gray-800">User Management</h2>
+        <div className="text-sm text-gray-600">
+          Total: {totalCount} users
         </div>
       </div>
 
-      {activeTab === 'profiles' ? (
+      {/* Search */}
+      <div className="bg-white p-4 rounded-lg shadow">
+        <input
+          type="text"
+          placeholder="Search by username or email..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+        />
+      </div>
+
+      {/* Users Table */}
+      <div className="bg-white rounded-lg shadow overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="min-w-full bg-white rounded-lg overflow-hidden">
-            <thead className="bg-gray-100">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Username</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Phone</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Balance</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  User
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Joined
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Status
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Balance
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Funded
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Withdrawn
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Earned
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Active Deposit
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Actions
+                </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200">
-              {profiles.map((profile) => (
+            <tbody className="bg-white divide-y divide-gray-200">
+              {users.map((user) => (
                 <motion.tr
-                  key={profile.id}
+                  key={user.id}
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ duration: 0.3 }}
+                  className="hover:bg-gray-50"
                 >
                   <td className="px-6 py-4 whitespace-nowrap">
-                    {profile.isEditing ? (
-                      <div className="flex items-center">
-                        <FaUser className="text-gray-500 mr-2" />
-                        <input
-                          type="text"
-                          value={profile.name}
-                          onChange={(e) => handleChange(profile.id, 'name', e.target.value)}
-                          className="w-full px-2 py-1 border rounded"
-                        />
+                    <div className="flex items-center">
+                      <FaUser className="text-gray-400 mr-3" />
+                      <div>
+                        <div className="text-sm font-medium text-gray-900">{user.username}</div>
+                        <div className="text-sm text-gray-500">{user.email}</div>
                       </div>
-                    ) : (
-                      <div className="flex items-center">
-                        <FaUser className="text-gray-500 mr-2" />
-                        {profile.name}
-                      </div>
-                    )}
+                    </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    {profile.isEditing ? (
-                      <input
-                        type="text"
-                        value={profile.username}
-                        onChange={(e) => handleChange(profile.id, 'username', e.target.value)}
-                        className="w-full px-2 py-1 border rounded"
-                      />
-                    ) : (
-                      profile.username
-                    )}
+                    <div className="flex items-center text-sm text-gray-900">
+                      <FaCalendar className="text-gray-400 mr-2" />
+                      {new Date(user.created_at).toLocaleDateString()}
+                    </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    {profile.isEditing ? (
-                      <div className="flex items-center">
-                        <FaEnvelope className="text-gray-500 mr-2" />
-                        <input
-                          type="email"
-                          value={profile.email}
-                          onChange={(e) => handleChange(profile.id, 'email', e.target.value)}
-                          className="w-full px-2 py-1 border rounded"
-                        />
-                      </div>
-                    ) : (
-                      <div className="flex items-center">
-                        <FaEnvelope className="text-gray-500 mr-2" />
-                        {profile.email}
-                      </div>
-                    )}
+                    <span
+                      className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                        user.is_active
+                          ? "bg-green-100 text-green-800"
+                          : "bg-red-100 text-red-800"
+                      }`}
+                    >
+                      {user.is_active ? "Active" : "Inactive"}
+                    </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    {profile.isEditing ? (
-                      <div className="flex items-center">
-                        <FaPhone className="text-gray-500 mr-2" />
-                        <input
-                          type="tel"
-                          value={profile.phoneNumber}
-                          onChange={(e) => handleChange(profile.id, 'phoneNumber', e.target.value)}
-                          className="w-full px-2 py-1 border rounded"
-                        />
-                      </div>
-                    ) : (
-                      <div className="flex items-center">
-                        <FaPhone className="text-gray-500 mr-2" />
-                        {profile.phoneNumber}
-                      </div>
-                    )}
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    <div className="flex items-center">
+                      <FaDollarSign className="text-gray-400 mr-1" />
+                      {user.balance.toFixed(2)}
+                    </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    {profile.isEditing ? (
-                      <div className="flex items-center">
-                        <FaDollarSign className="text-gray-500 mr-2" />
-                        <input
-                          type="number"
-                          value={profile.balance}
-                          onChange={(e) => handleChange(profile.id, 'balance', parseFloat(e.target.value))}
-                          className="w-full px-2 py-1 border rounded"
-                          step="0.01"
-                        />
-                      </div>
-                    ) : (
-                      <div className="flex items-center">
-                        <FaDollarSign className="text-gray-500 mr-2" />
-                        ${profile.balance.toFixed(2)}
-                      </div>
-                    )}
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    ${user.funded.toFixed(2)}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    ${user.total_withdrawal.toFixed(2)}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    <div className="flex items-center">
+                      <FaChartLine className="text-green-500 mr-1" />
+                      ${user.earned.toFixed(2)}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    <div className="flex items-center">
+                      <FaPiggyBank className="text-blue-500 mr-1" />
+                      ${user.active_deposit.toFixed(2)}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <div className="flex space-x-2">
                       <button
-                        onClick={() => profile.isEditing ? handleUpdate(profile) : toggleEdit(profile.id)}
-                        className={`p-2 rounded ${
-                          profile.isEditing 
-                            ? 'bg-green-500 text-white hover:bg-green-600' 
-                            : 'bg-blue-500 text-white hover:bg-blue-600'
-                        }`}
+                        onClick={() => handleEdit(user.id)}
+                        className="text-blue-600 hover:text-blue-900 bg-blue-50 px-3 py-1 rounded-md text-sm flex items-center"
                       >
-                        {profile.isEditing ? <FaSave /> : <FaEdit />}
+                        <FaEdit className="mr-1" />
+                        Edit
                       </button>
-                      {profile.isEditing && (
-                        <button
-                          onClick={() => toggleEdit(profile.id)}
-                          className="p-2 bg-gray-500 text-white rounded hover:bg-gray-600"
-                        >
-                          <FaTimes />
-                        </button>
-                      )}
+                      <button
+                        onClick={() => handleDelete(user.id)}
+                        className="text-red-600 hover:text-red-900 bg-red-50 px-3 py-1 rounded-md text-sm flex items-center"
+                      >
+                        <FaTrash className="mr-1" />
+                        Delete
+                      </button>
+                      <button
+                        onClick={() => handleManageFunds(user.id)}
+                        className="text-green-600 hover:text-green-900 bg-green-50 px-3 py-1 rounded-md text-sm flex items-center"
+                      >
+                        <FaMoneyBillWave className="mr-1" />
+                        Funds
+                      </button>
                     </div>
                   </td>
                 </motion.tr>
@@ -335,128 +264,40 @@ const UserProfileManagement = () => {
             </tbody>
           </table>
         </div>
-      ) : (
-        <div className="space-y-6">
-          {/* Platform Stats Cards */}
-          {platformStats && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                <div className="flex items-center">
-                  <div className="p-3 bg-blue-100 rounded-lg">
-                    <FaUsers className="text-blue-600 text-xl" />
-                  </div>
-                  <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">Total Users</p>
-                    <p className="text-2xl font-bold text-gray-900">{platformStats.totalUsers}</p>
-                  </div>
-                </div>
-              </div>
 
-              <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                <div className="flex items-center">
-                  <div className="p-3 bg-green-100 rounded-lg">
-                    <FaMoneyBillWave className="text-green-600 text-xl" />
-                  </div>
-                  <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">Total Balance</p>
-                    <p className="text-2xl font-bold text-gray-900">${platformStats.totalBalance.toFixed(2)}</p>
-                  </div>
-                </div>
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="bg-white px-4 py-3 border-t border-gray-200 sm:px-6">
+            <div className="flex justify-between items-center">
+              <div className="text-sm text-gray-700">
+                Showing <span className="font-medium">{(currentPage - 1) * itemsPerPage + 1}</span> to{" "}
+                <span className="font-medium">
+                  {Math.min(currentPage * itemsPerPage, totalCount)}
+                </span>{" "}
+                of <span className="font-medium">{totalCount}</span> results
               </div>
-
-              <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                <div className="flex items-center">
-                  <div className="p-3 bg-purple-100 rounded-lg">
-                    <FaChartLine className="text-purple-600 text-xl" />
-                  </div>
-                  <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">Total Earnings</p>
-                    <p className="text-2xl font-bold text-gray-900">${platformStats.totalEarnings.toFixed(2)}</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                <div className="flex items-center">
-                  <div className="p-3 bg-orange-100 rounded-lg">
-                    <FaPiggyBank className="text-orange-600 text-xl" />
-                  </div>
-                  <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">Total Invested</p>
-                    <p className="text-2xl font-bold text-gray-900">${platformStats.totalInvested.toFixed(2)}</p>
-                  </div>
-                </div>
+              <div className="flex space-x-2">
+                <button
+                  onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                  disabled={currentPage === 1}
+                  className="px-3 py-1 border border-gray-300 rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Previous
+                </button>
+                <button
+                  onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+                  disabled={currentPage === totalPages}
+                  className="px-3 py-1 border border-gray-300 rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Next
+                </button>
               </div>
             </div>
-          )}
-
-          {/* Earnings Charts */}
-          {earningsData && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Weekly Earnings Chart */}
-              <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                <h3 className="text-lg font-semibold mb-4">Weekly Earnings</h3>
-                <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={earningsData.weekly}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="date" />
-                    <YAxis />
-                    <Tooltip formatter={(value) => [`$${value}`, 'Earnings']} />
-                    <Legend />
-                    <Line 
-                      type="monotone" 
-                      dataKey="earnings" 
-                      stroke="#0088FE" 
-                      strokeWidth={2}
-                      name="Weekly Earnings"
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-
-              {/* Monthly Earnings Chart */}
-              <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                <h3 className="text-lg font-semibold mb-4">Monthly Earnings</h3>
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={earningsData.monthly}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="month" />
-                    <YAxis />
-                    <Tooltip formatter={(value) => [`$${value}`, 'Earnings']} />
-                    <Legend />
-                    <Bar 
-                      dataKey="earnings" 
-                      fill="#00C49F" 
-                      name="Monthly Earnings"
-                    />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-
-              {/* Yearly Earnings Chart */}
-              <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 col-span-1 lg:col-span-2">
-                <h3 className="text-lg font-semibold mb-4">Yearly Earnings</h3>
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={earningsData.yearly}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="year" />
-                    <YAxis />
-                    <Tooltip formatter={(value) => [`$${value}`, 'Earnings']} />
-                    <Legend />
-                    <Bar 
-                      dataKey="earnings" 
-                      fill="#FF8042" 
-                      name="Yearly Earnings"
-                    />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
+          </div>
+        )}
+      </div>
     </div>
   );
 };
 
-export default UserProfileManagement;
+export default AdminDashboard;

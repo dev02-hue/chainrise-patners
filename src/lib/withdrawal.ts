@@ -35,7 +35,35 @@ export async function initiateWithdrawal({
 
     const userId = session.user.id;
 
-    // 2. Check user balance
+    // 2. Check if user is banned or inactive
+    console.log('[initiateWithdrawal] Checking user status...');
+    const { data: userStatus, error: statusError } = await supabase
+      .from('chainrise_profile')
+      .select('is_banned, is_active, is_deleted')
+      .eq('id', userId)
+      .single();
+
+    if (statusError || !userStatus) {
+      console.error('[initiateWithdrawal] Failed to fetch user status:', statusError);
+      return { error: 'Failed to verify user status' };
+    }
+
+    if (userStatus.is_banned) {
+      console.warn('[initiateWithdrawal] User is banned');
+      return { error: 'Your account has been suspended. Please contact support.' };
+    }
+
+    if (!userStatus.is_active) {
+      console.warn('[initiateWithdrawal] User account is inactive');
+      return { error: 'Your account is currently inactive. Please contact support.' };
+    }
+
+    if (userStatus.is_deleted) {
+      console.warn('[initiateWithdrawal] User account is deleted');
+      return { error: 'Account not found.' };
+    }
+
+    // 3. Check user balance
     console.log('[initiateWithdrawal] Checking user balance...');
     const { data: profile, error: profileError } = await supabase
       .from('chainrise_profile')
@@ -53,18 +81,91 @@ export async function initiateWithdrawal({
       return { error: 'Insufficient balance for withdrawal' };
     }
 
-    // 3. Validate minimum withdrawal amount
-    const MIN_WITHDRAWAL = 10;
-    if (amount < MIN_WITHDRAWAL) {
-      console.warn(`[initiateWithdrawal] Amount ${amount} below minimum ${MIN_WITHDRAWAL}`);
-      return { error: `Minimum withdrawal amount is $${MIN_WITHDRAWAL}` };
+    // 4. Get withdrawal limits for user
+    console.log('[initiateWithdrawal] Checking withdrawal limits...');
+    const { data: limits } = await supabase
+      .from('chainrise_withdrawal_limits')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('is_active', true)
+      .single();
+
+    // If no custom limits set, use defaults
+    const minWithdrawal = limits?.min_withdrawal || 10.00;
+    const maxWithdrawal = limits?.max_withdrawal || 1000.00;
+    const dailyLimit = limits?.daily_limit || 5000.00;
+    const weeklyLimit = limits?.weekly_limit || 20000.00;
+    const monthlyLimit = limits?.monthly_limit || 50000.00;
+
+    // 5. Validate minimum withdrawal amount
+    if (amount < minWithdrawal) {
+      console.warn(`[initiateWithdrawal] Amount ${amount} below minimum ${minWithdrawal}`);
+      return { error: `Minimum withdrawal amount is $${minWithdrawal}` };
     }
 
-    // 4. Generate reference
+    // 6. Validate maximum withdrawal amount
+    if (amount > maxWithdrawal) {
+      console.warn(`[initiateWithdrawal] Amount ${amount} exceeds maximum ${maxWithdrawal}`);
+      return { error: `Maximum withdrawal amount is $${maxWithdrawal}` };
+    }
+
+    // 7. Check daily withdrawal limit
+    const today = new Date().toISOString().split('T')[0];
+    const { data: todayWithdrawals, error: todayError } = await supabase
+      .from('chainrise_withdrawals')
+      .select('amount')
+      .eq('user_id', userId)
+      .eq('status', 'completed')
+      .gte('created_at', today)
+      .lt('created_at', new Date(new Date(today).getTime() + 24 * 60 * 60 * 1000).toISOString());
+
+    if (!todayError && todayWithdrawals) {
+      const todayTotal = todayWithdrawals.reduce((sum, w) => sum + w.amount, 0);
+      if (todayTotal + amount > dailyLimit) {
+        console.warn(`[initiateWithdrawal] Daily limit exceeded: ${todayTotal + amount} > ${dailyLimit}`);
+        return { error: `Daily withdrawal limit of $${dailyLimit} exceeded` };
+      }
+    }
+
+    // 8. Check weekly withdrawal limit
+    const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const { data: weekWithdrawals, error: weekError } = await supabase
+      .from('chainrise_withdrawals')
+      .select('amount')
+      .eq('user_id', userId)
+      .eq('status', 'completed')
+      .gte('created_at', oneWeekAgo);
+
+    if (!weekError && weekWithdrawals) {
+      const weekTotal = weekWithdrawals.reduce((sum, w) => sum + w.amount, 0);
+      if (weekTotal + amount > weeklyLimit) {
+        console.warn(`[initiateWithdrawal] Weekly limit exceeded: ${weekTotal + amount} > ${weeklyLimit}`);
+        return { error: `Weekly withdrawal limit of $${weeklyLimit} exceeded` };
+      }
+    }
+
+    // 9. Check monthly withdrawal limit
+    const oneMonthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    const { data: monthWithdrawals, error: monthError } = await supabase
+      .from('chainrise_withdrawals')
+      .select('amount')
+      .eq('user_id', userId)
+      .eq('status', 'completed')
+      .gte('created_at', oneMonthAgo);
+
+    if (!monthError && monthWithdrawals) {
+      const monthTotal = monthWithdrawals.reduce((sum, w) => sum + w.amount, 0);
+      if (monthTotal + amount > monthlyLimit) {
+        console.warn(`[initiateWithdrawal] Monthly limit exceeded: ${monthTotal + amount} > ${monthlyLimit}`);
+        return { error: `Monthly withdrawal limit of $${monthlyLimit} exceeded` };
+      }
+    }
+
+    // 10. Generate reference
     const reference = `WDR-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
     console.log('[initiateWithdrawal] Generated reference:', reference);
 
-    // 5. Create withdrawal record
+    // 11. Create withdrawal record
     console.log('[initiateWithdrawal] Creating withdrawal record...');
     const { data: withdrawal, error: withdrawalError } = await supabase
       .from('chainrise_withdrawals')
@@ -85,7 +186,7 @@ export async function initiateWithdrawal({
     }
     console.log('[initiateWithdrawal] Withdrawal created successfully:', withdrawal.id);
 
-    // 6. Notify admin
+    // 12. Notify admin
     console.log('[initiateWithdrawal] Sending admin notification...');
     await sendWithdrawalNotificationToAdmin({
       userId,

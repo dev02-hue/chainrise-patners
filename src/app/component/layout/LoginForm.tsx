@@ -42,7 +42,9 @@ const LoginForm = () => {
       if (result.error) {
         setError(result.error);
       } else {
-        router.push("/user/dashboard");
+        // Use the redirect path provided by the server
+        const redirectPath = result.redirectTo || '/user/dashboard';
+        router.push(redirectPath);
       }
     } catch (err) {
       console.log(err)
