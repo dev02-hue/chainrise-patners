@@ -2,56 +2,71 @@
 'use server'
 
 import { supabase } from '@/lib/supabaseClient'
-import { cookies } from 'next/headers'
+ 
 import { redirect } from 'next/navigation'
 import { getSession } from './auth'
 import { Profile, UpdateUserProfileInput } from '@/types/businesses'
 import { getTotalUsers } from './getProfileData'
 import nodemailer from 'nodemailer'
+import { cookies } from 'next/headers'
 
 
 
-// Updated admin session management
+ 
 export async function getAdminSession() {
   try {
+    const cookieStore = await cookies();
+    const adminId = cookieStore.get('user-id')?.value;
+    const isAuthenticated = cookieStore.get('user-authenticated')?.value;
+    const isAdmin = cookieStore.get('user-is-admin')?.value === 'true';
 
-    const cookieStore = await cookies()
-    const adminId = cookieStore.get('admin-id')?.value
-    const isAuthenticated = cookieStore.get('admin-authenticated')?.value
-
-    if (!adminId || isAuthenticated !== 'true') {
-      return { isAuthenticated: false, admin: null }
-    }
-
-    // Verify admin exists in chainrise_profile and has admin privileges
-    const { data: admin, error } = await supabase
-      .from('chainrise_profile')
-      .select('id, username, email, is_admin')
-      .eq('id', adminId)
-      .eq('is_admin', true) // Ensure they're actually an admin
-      .single()
-
-    if (error || !admin) {
-      // Clear invalid session
-      const cookieStore = await cookies()
-      cookieStore.delete('admin-id')
-      cookieStore.delete('admin-username')
-      cookieStore.delete('admin-email')
-      cookieStore.delete('admin-authenticated')
-      return { isAuthenticated: false, admin: null }
+    if (!adminId || isAuthenticated !== 'true' || !isAdmin) {
+      return { isAuthenticated: false, admin: null };
     }
 
     return { 
       isAuthenticated: true, 
       admin: {
-        id: admin.id,
-        username: admin.username,
-        email: admin.email
+        id: adminId,
+        username: cookieStore.get('user-username')?.value,
+        email: cookieStore.get('user-email')?.value,
       }
-    }
+    };
   } catch (err) {
-    console.error('Error getting admin session:', err)
-    return { isAuthenticated: false, admin: null }
+    console.error('Error getting admin session:', err);
+    return { isAuthenticated: false, admin: null };
+  }
+}
+
+
+// lib/auth.ts - Add this function
+export async function getCurrentUser() {
+  try {
+    const { data: { user }, error } = await supabase.auth.getUser();
+    
+    if (error || !user) {
+      return { user: null, isAuthenticated: false };
+    }
+
+    // Get profile to check admin status
+    const { data: profile } = await supabase
+      .from('chainrise_profile')
+      .select('is_admin, username, email')
+      .eq('id', user.id)
+      .single();
+
+    return {
+      user: {
+        ...user,
+        is_admin: profile?.is_admin || false,
+        username: profile?.username,
+        email: profile?.email
+      },
+      isAuthenticated: true
+    };
+  } catch (err) {
+    console.log(err)
+    return { user: null, isAuthenticated: false };
   }
 }
 
@@ -402,7 +417,7 @@ export async function adminFundUser({
   userId,
   amount,
   cryptoType,
-  transactionType = 'bonus', // 'bonus', 'deposit', 'refund', 'correction'
+  transactionType = 'bonus',
   description,
   sendEmailNotification = true,
   adminId
@@ -414,62 +429,56 @@ export async function adminFundUser({
   description: string;
   sendEmailNotification?: boolean;
   adminId: string;
-}): Promise<{ success?: boolean; error?: string; depositId?: string }> {
+}): Promise<{ success?: boolean; error?: string; depositId?: string; newBalance?: number }> {
   try {
     console.log('[adminFundUser] Starting admin funding process:', {
       userId, amount, cryptoType, transactionType, description, adminId
     });
 
-    // 1. Verify admin privileges
-    const { data: admin, error: adminError } = await supabase
-      .from('chainrise_profile')
-      .select('is_admin')
-      .eq('id', adminId)
-      .single();
+    // 1. Use the database function to update balance (bypasses RLS)
+    console.log('[adminFundUser] Calling database function...');
+    
+    const { data: dbResult, error: rpcError } = await supabase.rpc('admin_update_user_balance', {
+      target_user_id: userId,
+      admin_user_id: adminId,
+      amount_to_add: amount,
+      transaction_type: transactionType,
+      description_text: description
+    });
 
-    if (adminError || !admin || !admin.is_admin) {
-      console.error('[adminFundUser] Admin verification failed:', adminError);
-      return { error: 'Unauthorized: Admin privileges required' };
+    console.log('[adminFundUser] Database function result:', { dbResult, rpcError });
+
+    if (rpcError) {
+      console.error('[adminFundUser] Database function failed:', rpcError);
+      return { error: 'Database update failed: ' + rpcError.message };
     }
 
-    // 2. Verify target user exists and is active
-    const { data: user, error: userError } = await supabase
-      .from('chainrise_profile')
-      .select('id, email, username, is_banned, is_active, balance, total_bonus, total_penalty, total_deposited')
-      .eq('id', userId)
-      .single();
-
-    if (userError || !user) {
-      console.error('[adminFundUser] User verification failed:', userError);
-      return { error: 'User not found' };
+    if (dbResult?.error) {
+      console.error('[adminFundUser] Database function returned error:', dbResult.error);
+      return { error: dbResult.error };
     }
 
-    if (user.is_banned) {
-      return { error: 'Cannot fund banned user' };
+    if (!dbResult?.success) {
+      console.error('[adminFundUser] Database function did not return success');
+      return { error: 'Balance update failed unexpectedly' };
     }
 
-    if (!user.is_active) {
-      return { error: 'Cannot fund inactive user' };
-    }
+    console.log('[adminFundUser] Balance updated successfully via database function:', dbResult);
 
-    // 3. Validate amount
-    if (amount <= 0) {
-      return { error: 'Amount must be greater than 0' };
-    }
-
-    // 4. Generate reference
+    // 2. Create deposit record
     const reference = `ADM-${transactionType.toUpperCase()}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-
-    // 5. Create admin deposit record
+    
+    console.log('[adminFundUser] Creating deposit record...');
+    
     const { data: deposit, error: depositError } = await supabase
       .from('chainrise_deposits')
       .insert([{
         user_id: userId,
         amount,
         crypto_type: cryptoType,
-        wallet_address: 'ADMIN_FUNDING', // Special indicator for admin funding
+        wallet_address: 'ADMIN_FUNDING',
         reference,
-        status: 'completed', // Auto-complete admin deposits
+        status: 'completed',
         processed_at: new Date().toISOString(),
         admin_notes: `Admin funding: ${description} | By: ${adminId}`,
         is_admin_funded: true,
@@ -481,42 +490,17 @@ export async function adminFundUser({
 
     if (depositError || !deposit) {
       console.error('[adminFundUser] Deposit creation failed:', depositError);
-      return { error: 'Failed to create funding record' };
-    }
-
-    // 6. Update user balance and relevant totals
-    const updateData: any = {
-      balance: user.balance + amount,
-      updated_at: new Date().toISOString()
-    };
-
-    // Update specific totals based on transaction type
-    if (transactionType === 'bonus') {
-      updateData.total_bonus = (user.total_bonus || 0) + amount;
-    } else if (transactionType === 'deposit') {
-      // For regular deposits, you might want to track differently
-      updateData.total_deposited = (user.total_deposited || 0) + amount;
-    }
-
-    const { error: updateError } = await supabase
-      .from('chainrise_profile')
-      .update(updateData)
-      .eq('id', userId);
-
-    if (updateError) {
-      console.error('[adminFundUser] User balance update failed:', updateError);
       
-      // Rollback deposit record
-      await supabase
-        .from('chainrise_deposits')
-        .delete()
-        .eq('id', deposit.id);
-      
-      return { error: 'Failed to update user balance' };
+      // Note: We can't easily rollback the database function, but the deposit is the audit trail
+      return { error: 'Failed to create funding record: ' + depositError?.message };
     }
 
-    // 7. Record transaction
-    await supabase
+    console.log('[adminFundUser] Deposit record created:', deposit.id);
+
+    // 3. Record transaction
+    console.log('[adminFundUser] Recording transaction...');
+    
+    const { error: transactionError } = await supabase
       .from('chainrise_transactions')
       .insert({
         user_id: userId,
@@ -530,12 +514,19 @@ export async function adminFundUser({
           deposit_id: deposit.id,
           admin_id: adminId,
           transaction_type: transactionType,
-          description: description
+          description: description,
+          previous_balance: dbResult.previous_balance,
+          new_balance: dbResult.new_balance
         }
       });
 
-    // 8. Send notification if requested
+    if (transactionError) {
+      console.error('[adminFundUser] Transaction record failed:', transactionError);
+    }
+
+    // 4. Send notification
     if (sendEmailNotification) {
+      console.log('[adminFundUser] Sending notification...');
       await sendAdminFundingNotificationToUser({
         userId,
         amount,
@@ -547,13 +538,16 @@ export async function adminFundUser({
     }
 
     console.log('[adminFundUser] Admin funding completed successfully');
-    return { success: true, depositId: deposit.id };
+    return { 
+      success: true, 
+      depositId: deposit.id,
+      newBalance: dbResult.new_balance
+    };
   } catch (err) {
     console.error('[adminFundUser] Unexpected error:', err);
-    return { error: 'An unexpected error occurred' };
+    return { error: 'An unexpected error occurred: ' + (err instanceof Error ? err.message : 'Unknown error') };
   }
 }
-
 
 
 // Get comprehensive user metrics for admin dashboard
