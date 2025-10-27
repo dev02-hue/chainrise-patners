@@ -269,23 +269,26 @@ export async function getUserInvestments(): Promise<{ data?: UserInvestment[]; e
 }
 
 // Calculate daily profits (to be called by a cron job)
+// Update this function in your investment.ts
 export async function calculateDailyProfits(): Promise<{ success?: boolean; error?: string }> {
   try {
-    console.log('Starting daily profit calculation...');
+    console.log('🔄 Starting daily profit calculation...', new Date().toISOString());
 
     // Call the PostgreSQL function to calculate profits
-    const { error } = await supabase.rpc('calculate_daily_profits');
+    const { data, error } = await supabase.rpc('calculate_daily_profits');
 
     if (error) {
-      console.error('Error calculating daily profits:', error);
-      return { error: 'Failed to calculate daily profits' };
+      console.error('❌ Error calculating daily profits:', error);
+      console.error('Error details:', JSON.stringify(error, null, 2));
+      return { error: 'Failed to calculate daily profits: ' + error.message };
     }
 
-    console.log('Daily profits calculated successfully');
+    console.log('✅ Daily profits calculated successfully');
+    console.log('Result:', data);
     return { success: true };
   } catch (err) {
-    console.error('Unexpected error in calculateDailyProfits:', err);
-    return { error: 'An unexpected error occurred' };
+    console.error('💥 Unexpected error in calculateDailyProfits:', err);
+    return { error: 'An unexpected error occurred: ' + (err as Error).message };
   }
 }
 
