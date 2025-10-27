@@ -1,0 +1,33 @@
+name: Calculate Daily Investment Profits
+
+on:
+  schedule:
+    # Runs every day at 2:00 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:  # Allows manual triggering
+
+jobs:
+  calculate-profits:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call Daily Profits API
+        run: |
+          response=$(curl -s -w "\n%{http_code}" -X POST "${{ secrets.NEXTJS_APP_URL }}/api/cron/daily-profits" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json")
+          
+          body=$(echo "$response" | head -n 1)
+          status_code=$(echo "$response" | tail -n 1)
+          
+          echo "Response status: $status_code"
+          echo "Response body: $body"
+          
+          if [ "$status_code" -ne 200 ]; then
+            echo "❌ API call failed"
+            exit 1
+          else
+            echo "✅ API call successful"
+          fi
+
+      - name: Log execution time
+        run: echo "Cron job executed at $(date -u)"

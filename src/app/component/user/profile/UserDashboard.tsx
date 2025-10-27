@@ -22,9 +22,10 @@ import {
  
 } from '@/lib/balance';
  
-import TransactionsTable from '../layout/TransactionsTable';
+ 
 import { getProfileData, getUserDashboardStats } from '@/lib/getProfileData';
 import { getSession } from '@/lib/auth';
+import TransactionsTableNoBalance from '../layout/TransactionsTableNoBalance';
 
 const UserDashboard: React.FC = () => {
   const [userStats, setUserStats] = useState({
@@ -56,24 +57,16 @@ const UserDashboard: React.FC = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        console.log('🔄 Starting data fetch...');
         setLoading(true);
         setError(null);
 
-        // ✅ Get the current user session or ID
-        console.log('🔐 Getting session...');
         const { session } = await getSession();
-        console.log('📋 Session data:', session);
-        
         const userId = session?.user?.id;
-        console.log('👤 User ID:', userId);
 
         if (!userId) {
-          console.error('❌ No user ID found in session');
           throw new Error('User ID not found in session');
         }
 
-        console.log('📥 Fetching all data in parallel...');
         const [
           profileData,
           totalDeposit,
@@ -90,37 +83,19 @@ const UserDashboard: React.FC = () => {
           getUserDashboardStats()
         ]);
 
-        console.log('📊 Profile data response:', profileData);
-        console.log('💰 Total deposit:', totalDeposit);
-        console.log('📈 Total investment:', totalInvestment);
-        console.log('💸 Total completed withdrawal:', totalCompletedWithdrawal);
-        console.log('⏳ Total pending withdrawal:', totalPendingWithdrawal);
-        console.log('📱 Dashboard stats:', dashboardStats);
-
-        // Check for profile data errors
         if (profileData.error || !profileData.data) {
-          console.error('❌ Profile data error:', profileData.error);
           throw new Error(profileData.error || 'Failed to fetch profile data');
         }
 
-        console.log('✅ Profile data successfully fetched:', profileData.data);
-
         const referralCode = profileData.data.referralCode || generateReferralCode();
-        console.log('🔗 Referral code:', referralCode);
-
         const referralLink = `${window.location.origin}/signup?ref_id=${referralCode}`;
-        console.log('🌐 Referral link:', referralLink);
 
-        // Set user data
         setUser({
           username: profileData.data.username || 'User',
           referralLink: referralLink,
           referralCode: referralCode,
         });
 
-        console.log('👤 User state set with username:', profileData.data.username);
-
-        // Process dashboard stats
         const stats = dashboardStats?.data || {
           totalBalance: profileData.data.balance || 0,
           totalEarnings: 0,
@@ -130,9 +105,6 @@ const UserDashboard: React.FC = () => {
           pendingWithdrawals: totalPendingWithdrawal,
         };
 
-        console.log('📊 Processed stats:', stats);
-
-        // Set user stats
         const finalUserStats = {
           balance: stats.totalBalance,
           totalDeposit: totalDeposit,
@@ -145,39 +117,17 @@ const UserDashboard: React.FC = () => {
           pendingDeposits: stats.pendingDeposits,
         };
 
-        console.log('🎯 Final user stats:', finalUserStats);
         setUserStats(finalUserStats);
 
-        console.log('✅ All data successfully loaded and state updated');
-
       } catch (err) {
-        console.error('❌ Error in fetchData:', err);
         setError(err instanceof Error ? err.message : 'An unexpected error occurred');
       } finally {
-        console.log('🏁 Fetch completed, setting loading to false');
         setLoading(false);
       }
     };
 
     fetchData();
   }, []);
-
-  // Add useEffect to log state changes
-  useEffect(() => {
-    console.log('🔄 User state updated:', user);
-  }, [user]);
-
-  useEffect(() => {
-    console.log('📊 UserStats state updated:', userStats);
-  }, [userStats]);
-
-  useEffect(() => {
-    console.log('⏳ Loading state:', loading);
-  }, [loading]);
-
-  useEffect(() => {
-    console.log('🚨 Error state:', error);
-  }, [error]);
 
   const generateReferralCode = (): string => {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -244,19 +194,15 @@ const UserDashboard: React.FC = () => {
     visible: { opacity: 1, y: 0 }
   };
 
-  // Rest of your component remains the same...
   if (loading) {
-    console.log('👀 Rendering loading state...');
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50/30 py-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          {/* Skeleton Header */}
           <div className="mb-8">
             <div className="h-8 w-64 bg-gray-200 rounded-lg animate-pulse mb-2"></div>
             <div className="h-4 w-96 bg-gray-200 rounded animate-pulse"></div>
           </div>
 
-          {/* Skeleton Stats Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
             {[...Array(6)].map((_, index) => (
               <motion.div
@@ -276,7 +222,6 @@ const UserDashboard: React.FC = () => {
             ))}
           </div>
 
-          {/* Skeleton Transactions */}
           <div className="bg-white rounded-2xl shadow-sm p-6 animate-pulse">
             <div className="h-6 w-48 bg-gray-200 rounded mb-6"></div>
             {[...Array(5)].map((_, index) => (
@@ -294,7 +239,6 @@ const UserDashboard: React.FC = () => {
   }
 
   if (error) {
-    console.log('🚨 Rendering error state:', error);
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50/30 py-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -328,13 +272,9 @@ const UserDashboard: React.FC = () => {
     );
   }
 
-  console.log('🎉 Rendering main dashboard with user:', user);
-  console.log('📊 Current stats:', userStats);
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50/30 py-8">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Welcome Section */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -349,7 +289,6 @@ const UserDashboard: React.FC = () => {
               <p className="text-gray-600 text-lg">Here&apos;s your investment dashboard overview</p>
             </div>
             
-            {/* Quick Actions */}
             <div className="flex flex-wrap gap-3">
               <button className="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors duration-200">
                 <FiActivity className="mr-2" />
@@ -362,7 +301,6 @@ const UserDashboard: React.FC = () => {
             </div>
           </div>
           
-          {/* Referral Section */}
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -421,7 +359,6 @@ const UserDashboard: React.FC = () => {
           </motion.div>
         </motion.div>
 
-        {/* Stats Grid */}
         <motion.div
           initial="hidden"
           animate="visible"
@@ -469,7 +406,6 @@ const UserDashboard: React.FC = () => {
           ))}
         </motion.div>
 
-        {/* Recent Transactions */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -480,7 +416,7 @@ const UserDashboard: React.FC = () => {
             <h3 className="text-lg font-semibold text-gray-900">Recent Transactions</h3>
             <p className="text-sm text-gray-600 mt-1">Your latest deposit and withdrawal activities</p>
           </div>
-          <TransactionsTable />
+          <TransactionsTableNoBalance />
         </motion.div>
       </div>
     </div>

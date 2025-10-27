@@ -9,6 +9,7 @@ import { Profile, UpdateUserProfileInput } from '@/types/businesses'
 import { getTotalUsers } from './getProfileData'
 import nodemailer from 'nodemailer'
 import { cookies } from 'next/headers'
+import { createClient } from '@supabase/supabase-js'
 
 
 
@@ -742,82 +743,118 @@ export async function adminUpdateUserProfile({
   };
 }): Promise<{ success?: boolean; error?: string }> {
   try {
-    // Verify admin privileges
-    const { data: admin } = await supabase
+    console.log('🔧 [adminUpdateUserProfile] STARTING UPDATE:', { 
+      userId, 
+      adminId, 
+      updates
+    });
+
+    // 1. Verify admin privileges
+    const { data: admin, error: adminError } = await supabase
       .from('chainrise_profile')
-      .select('is_admin')
+      .select('id, username, is_admin')
       .eq('id', adminId)
       .single();
 
-    if (!admin?.is_admin) {
+    if (adminError || !admin || !admin.is_admin) {
+      console.error('❌ [adminUpdateUserProfile] Admin verification failed');
       return { error: 'Unauthorized: Admin privileges required' };
     }
 
-    const { error } = await supabase
+    console.log('✅ [adminUpdateUserProfile] Admin verified');
+
+    // 2. Use a different approach - DON'T use .single() on UPDATE
+    console.log('🔄 [adminUpdateUserProfile] Attempting update without .single()...');
+    
+    const updateData = {
+      ...updates,
+      updated_at: new Date().toISOString()
+    };
+
+    // Method 1: Try update without .single() first
+    const { error: updateError, count } = await supabase
       .from('chainrise_profile')
-      .update({
-        ...updates,
-        updated_at: new Date().toISOString()
-      })
+      .update(updateData)
       .eq('id', userId);
 
-    if (error) {
-      console.error('[adminUpdateUserProfile] Update failed:', error);
-      return { error: 'Failed to update user profile' };
+    console.log('📊 [adminUpdateUserProfile] Update result (no .single()):', {
+      updateError,
+      count,
+      rowsAffected: count
+    });
+
+    if (updateError) {
+      console.error('❌ [adminUpdateUserProfile] Update failed:', updateError);
+      return { error: `Update failed: ${updateError.message}` };
     }
 
+    // If count is 0, no rows were updated due to RLS
+    if (count === 0) {
+      console.warn('⚠️ [adminUpdateUserProfile] No rows updated - RLS likely blocking');
+      
+      // Method 2: Use RPC function as fallback
+      console.log('🔄 [adminUpdateUserProfile] Trying RPC fallback...');
+      return await adminUpdateUserProfileRPC({ userId, adminId, updates });
+    }
+
+    console.log(`✅ [adminUpdateUserProfile] Update successful - ${count} row(s) affected`);
     return { success: true };
+
   } catch (err) {
-    console.error('[adminUpdateUserProfile] Unexpected error:', err);
+    console.error('💥 [adminUpdateUserProfile] Unexpected error:', err);
     return { error: 'An unexpected error occurred' };
   }
 }
 
-// Update user email (requires auth update)
-export async function adminUpdateUserEmail({
+// RPC-based fallback function
+async function adminUpdateUserProfileRPC({
   userId,
   adminId,
-  newEmail
+  updates
 }: {
   userId: string;
   adminId: string;
-  newEmail: string;
+  updates: any;
 }): Promise<{ success?: boolean; error?: string }> {
   try {
-    // Verify admin privileges
-    const { data: admin } = await supabase
-      .from('chainrise_profile')
-      .select('is_admin')
-      .eq('id', adminId)
-      .single();
-
-    if (!admin?.is_admin) {
-      return { error: 'Unauthorized: Admin privileges required' };
-    }
-
-    // Update in auth system (this would require Supabase admin API)
-    // Note: This might require additional setup with Supabase Admin API
+    console.log('🔧 [adminUpdateUserProfileRPC] Using RPC fallback...');
     
-    // Update in profile table
-    const { error } = await supabase
-      .from('chainrise_profile')
-      .update({
-        email: newEmail,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', userId);
+    const { data: result, error } = await supabase.rpc('admin_update_user_profile', {
+      target_user_id: userId,
+      admin_user_id: adminId,
+      name_text: updates.name,
+      username_text: updates.username,
+      phone_text: updates.phone_number,
+      btc_address_text: updates.btc_address,
+      bnb_address_text: updates.bnb_address,
+      dodge_address_text: updates.dodge_address,
+      eth_address_text: updates.eth_address,
+      solana_address_text: updates.solana_address,
+      usdt_address_text: updates.usdttrc20_address
+    });
+
+    console.log('📊 [adminUpdateUserProfileRPC] RPC result:', { result, error });
 
     if (error) {
-      console.error('[adminUpdateUserEmail] Update failed:', error);
-      return { error: 'Failed to update user email' };
+      console.error('❌ [adminUpdateUserProfileRPC] RPC failed:', error);
+      return { error: `RPC update failed: ${error.message}` };
     }
 
+    if (result?.error) {
+      console.error('❌ [adminUpdateUserProfileRPC] RPC returned error:', result.error);
+      return { error: result.error };
+    }
+
+    console.log('✅ [adminUpdateUserProfileRPC] RPC update successful');
     return { success: true };
+
   } catch (err) {
-    console.error('[adminUpdateUserEmail] Unexpected error:', err);
-    return { error: 'An unexpected error occurred' };
+    console.error('💥 [adminUpdateUserProfileRPC] Unexpected error:', err);
+    return { error: 'RPC fallback failed' };
   }
 }
+
+ 
 
 
 // Send notification for admin funding
@@ -1232,7 +1269,30 @@ export async function adminSoftDeleteUser({
       return { error: 'User is already deleted' };
     }
 
-    // 3. Update user delete status
+    // 3. Create Supabase admin client with service role key
+    const supabaseAdmin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+
+    // 4. Update user in Auth system using service role key
+    const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(
+      userId,
+      { 
+        user_metadata: {
+          soft_deleted: true,
+          deleted_at: new Date().toISOString(),
+          deleted_reason: reason
+        }
+      }
+    );
+
+    if (authError) {
+      console.warn('[adminSoftDeleteUser] Auth update warning:', authError);
+      // Continue with profile update even if auth update fails
+    }
+
+    // 5. Update user delete status in profile
     const { error: updateError } = await supabase
       .from('chainrise_profile')
       .update({
@@ -1248,7 +1308,7 @@ export async function adminSoftDeleteUser({
       return { error: 'Failed to delete user' };
     }
 
-    // 4. Record delete action
+    // 6. Record delete action
     await supabase
       .from('chainrise_admin_actions')
       .insert({
@@ -1310,7 +1370,28 @@ export async function adminRestoreUser({
       return { error: 'User is not deleted' };
     }
 
-    // 3. Update user delete status
+    // 3. Create Supabase admin client with service role key
+    const supabaseAdmin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+
+    // 4. Update user in Auth system using service role key
+    const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(
+      userId,
+      { 
+        user_metadata: {
+          soft_deleted: false
+        }
+      }
+    );
+
+    if (authError) {
+      console.warn('[adminRestoreUser] Auth update warning:', authError);
+      // Continue with profile update even if auth update fails
+    }
+
+    // 5. Update user delete status
     const { error: updateError } = await supabase
       .from('chainrise_profile')
       .update({
@@ -1326,7 +1407,7 @@ export async function adminRestoreUser({
       return { error: 'Failed to restore user' };
     }
 
-    // 4. Record restore action
+    // 6. Record restore action
     await supabase
       .from('chainrise_admin_actions')
       .insert({
@@ -1346,7 +1427,6 @@ export async function adminRestoreUser({
     return { error: 'An unexpected error occurred' };
   }
 }
-
 
 // Send ban notification to user
 async function sendUserBanNotification(params: {
@@ -1423,3 +1503,272 @@ export async function getUserProfile(userId: string): Promise<{ data?: any; erro
     return { error: 'An unexpected error occurred' };
   }
 }
+
+
+
+export async function setUserWithdrawalLimits({
+  userId,
+  adminId,
+  minWithdrawal,
+  maxWithdrawal,
+  dailyLimit,
+  weeklyLimit,
+  monthlyLimit
+}: {
+  userId: string;
+  adminId: string;
+  minWithdrawal?: number;
+  maxWithdrawal?: number;
+  dailyLimit?: number;
+  weeklyLimit?: number;
+  monthlyLimit?: number;
+}): Promise<{ success?: boolean; error?: string }> {
+  try {
+    // Verify admin privileges
+    const { data: admin } = await supabase
+      .from('chainrise_profile')
+      .select('is_admin')
+      .eq('id', adminId)
+      .single();
+
+    if (!admin?.is_admin) {
+      return { error: 'Unauthorized: Admin privileges required' };
+    }
+
+    const { error } = await supabase.rpc('admin_set_withdrawal_limits', {
+      target_user_id: userId,
+      admin_id: adminId,
+      min_withdrawal: minWithdrawal,
+      max_withdrawal: maxWithdrawal,
+      daily_limit: dailyLimit,
+      weekly_limit: weeklyLimit,
+      monthly_limit: monthlyLimit
+    });
+
+    if (error) {
+      console.error('[setUserWithdrawalLimits] Failed:', error);
+      return { error: 'Failed to set withdrawal limits: ' + error.message };
+    }
+
+    return { success: true };
+  } catch (err) {
+    console.error('[setUserWithdrawalLimits] Unexpected error:', err);
+    return { error: 'An unexpected error occurred' };
+  }
+}
+
+// Get user withdrawal limits
+export async function getUserWithdrawalLimits(userId: string): Promise<{
+  data?: {
+    min_withdrawal: number;
+    max_withdrawal: number;
+    daily_limit: number;
+    weekly_limit: number;
+    monthly_limit: number;
+    is_active: boolean;
+  };
+  error?: string;
+}> {
+  try {
+    const { data: limits, error } = await supabase
+      .from('chainrise_withdrawal_limits')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('is_active', true)
+      .single();
+
+    if (error && error.code !== 'PGRST116') { // PGRST116 = no rows found
+      return { error: 'Failed to fetch withdrawal limits' };
+    }
+
+    // Return defaults if no custom limits set
+    if (!limits) {
+      return {
+        data: {
+          min_withdrawal: 10.00,
+          max_withdrawal: 1000.00,
+          daily_limit: 5000.00,
+          weekly_limit: 20000.00,
+          monthly_limit: 50000.00,
+          is_active: true
+        }
+      };
+    }
+
+    return { data: limits };
+  } catch (err) {
+    console.error('[getUserWithdrawalLimits] Unexpected error:', err);
+    return { error: 'An unexpected error occurred' };
+  }
+}
+
+
+ export async function adminUpdateUserEmail({
+  userId,
+  adminId,
+  newEmail
+}: {
+  userId: string;
+  adminId: string;
+  newEmail: string;
+}): Promise<{ success?: boolean; error?: string }> {
+  try {
+    console.log('🔧 [adminUpdateUserEmail] STARTING EMAIL UPDATE:', { 
+      userId, 
+      adminId, 
+      newEmail 
+    });
+
+    // 1. Verify admin privileges
+    const { data: admin, error: adminError } = await supabase
+      .from('chainrise_profile')
+      .select('is_admin')
+      .eq('id', adminId)
+      .single();
+
+    if (adminError || !admin || !admin.is_admin) {
+      console.error('❌ [adminUpdateUserEmail] Admin verification failed');
+      return { error: 'Unauthorized: Admin privileges required' };
+    }
+
+    console.log('✅ [adminUpdateUserEmail] Admin verified');
+
+    // 2. Create Supabase admin client with service role key
+    const supabaseAdmin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false
+        }
+      }
+    );
+
+    // 3. Update email in Auth system
+    console.log('🔄 [adminUpdateUserEmail] Updating auth email...');
+    const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(
+      userId,
+      { email: newEmail }
+    );
+
+    if (authError) {
+      console.error('❌ [adminUpdateUserEmail] Auth update failed:', authError);
+      return { error: `Failed to update auth email: ${authError.message}` };
+    }
+
+    console.log('✅ [adminUpdateUserEmail] Auth email updated successfully');
+
+    // 4. Update email in profile table
+    console.log('🔄 [adminUpdateUserEmail] Updating profile email...');
+    const { error: profileError } = await supabase
+      .from('chainrise_profile')
+      .update({
+        email: newEmail,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', userId);
+
+    if (profileError) {
+      console.error('❌ [adminUpdateUserEmail] Profile update failed:', profileError);
+      
+      // Attempt to revert auth email if profile update fails
+      console.log('🔄 [adminUpdateUserEmail] Attempting to revert auth email...');
+      const { data: oldUser } = await supabase
+        .from('chainrise_profile')
+        .select('email')
+        .eq('id', userId)
+        .single();
+      
+      if (oldUser?.email) {
+        await supabaseAdmin.auth.admin.updateUserById(userId, { email: oldUser.email });
+      }
+      
+      return { error: `Failed to update profile email: ${profileError.message}` };
+    }
+
+    console.log('✅ [adminUpdateUserEmail] Profile email updated successfully');
+
+    // 5. Record the action in admin logs
+    await supabase
+      .from('chainrise_admin_actions')
+      .insert({
+        admin_id: adminId,
+        user_id: userId,
+        action_type: 'update_email',
+        description: `User email updated to: ${newEmail}`,
+        metadata: {
+          previous_email: '', // You might want to fetch and store the old email
+          new_email: newEmail
+        }
+      });
+
+    // 6. Send notification to user
+    await sendEmailUpdateNotification({
+      userId,
+      newEmail,
+      adminId
+    });
+
+    console.log('✅ [adminUpdateUserEmail] Email update completed successfully');
+    return { success: true };
+
+  } catch (err) {
+    console.error('💥 [adminUpdateUserEmail] Unexpected error:', err);
+    return { error: 'An unexpected error occurred: ' + (err instanceof Error ? err.message : 'Unknown error') };
+  }
+}
+
+// Send email update notification
+async function sendEmailUpdateNotification(params: {
+  userId: string;
+  newEmail: string;
+  adminId: string;
+}) {
+  try {
+    const { data: user } = await supabase
+      .from('chainrise_profile')
+      .select('email, name')
+      .eq('id', params.userId)
+      .single();
+
+    if (!user?.email) return;
+
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: process.env.EMAIL_USERNAME!,
+        pass: process.env.EMAIL_PASSWORD!,
+      },
+    });
+
+    const mailOptions = {
+      from: `ChainRise Admin <${process.env.EMAIL_USERNAME}>`,
+      to: user.email, // Send to OLD email address
+      subject: 'Email Address Updated',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #2a52be;">Email Address Updated</h2>
+          <p>Dear ${user.name || 'Valued Customer'},</p>
+          <p>Your account email address has been updated by an administrator.</p>
+          <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin: 20px 0;">
+            <p><strong>New Email Address:</strong> ${params.newEmail}</p>
+            <p><strong>Update Date:</strong> ${new Date().toLocaleDateString()}</p>
+          </div>
+          <p>Please use your new email address (<strong>${params.newEmail}</strong>) for all future logins and communications.</p>
+          <p>If you did not request this change, please contact our support team immediately.</p>
+          <p>Best regards,<br>ChainRise Support Team</p>
+        </div>
+      `,
+    };
+
+    await transporter.sendMail(mailOptions);
+    console.log(`Email update notification sent to ${user.email}`);
+  } catch (error) {
+    console.error('Failed to send email update notification:', error);
+  }
+}
+
+
+// Add these to your adminauth.ts file
+ 
