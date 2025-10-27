@@ -9,13 +9,14 @@ import {
   FaTrash, 
   FaDollarSign, 
   FaUser,
- 
   FaCalendar,
   FaChartLine,
   FaMoneyBillWave,
-  FaPiggyBank
+  FaPiggyBank,
+  FaUndo,
+  FaTimes
 } from "react-icons/fa";
-import { getAllUsersWithMetrics, adminSoftDeleteUser, getAdminSession } from "@/lib/adminauth";
+import { getAllUsersWithMetrics, adminSoftDeleteUser, adminRestoreUser, getAdminSession, adminActivateUser, adminDeactivateUser } from "@/lib/adminauth";
 
 interface UserWithMetrics {
   id: string;
@@ -23,6 +24,7 @@ interface UserWithMetrics {
   email: string;
   created_at: string;
   is_active: boolean;
+  is_deleted: boolean;
   balance: number;
   funded: number;
   earned: number;
@@ -41,6 +43,7 @@ const AdminDashboard = () => {
   const [search, setSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
+  const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
   const itemsPerPage = 10;
 
   useEffect(() => {
@@ -49,8 +52,6 @@ const AdminDashboard = () => {
 
   const fetchUsers = async () => {
     try {
-
-      
       setLoading(true);
       const { data: usersData, error, count } = await getAllUsersWithMetrics({
         search: search || undefined,
@@ -64,7 +65,14 @@ const AdminDashboard = () => {
       }
 
       if (usersData) {
-        setUsers(usersData);
+        console.log('📊 Users data received:', usersData);
+        // Ensure is_deleted is properly set (handle null/undefined)
+        const usersWithDeletedStatus = usersData.map(user => ({
+          ...user,
+          is_deleted: user.is_deleted || false
+        }));
+        
+        setUsers(usersWithDeletedStatus);
         setTotalCount(count || 0);
       }
     } catch (err) {
@@ -89,6 +97,7 @@ const AdminDashboard = () => {
         return;
       }
 
+      console.log('🗑️ Deleting user:', userId);
       const { success, error } = await adminSoftDeleteUser({
         userId,
         adminId: session.admin.id,
@@ -104,6 +113,64 @@ const AdminDashboard = () => {
     } catch (error) {
       console.error("Delete failed:", error);
       toast.error("Failed to delete user");
+    }
+  };
+
+  const handleRestore = async (userId: string) => {
+    if (!confirm("Are you sure you want to restore this user?")) return;
+
+    try {
+      const session = await getAdminSession();
+      if (!session.admin) {
+        toast.error("Admin session expired");
+        return;
+      }
+
+      console.log('🔄 Restoring user:', userId);
+      const { success, error } = await adminRestoreUser({
+        userId,
+        adminId: session.admin.id,
+        reason: "Admin manual restore"
+      });
+
+      if (success) {
+        toast.success("User restored successfully");
+        fetchUsers(); // Refresh the list
+      } else {
+        toast.error(error || "Failed to restore user");
+      }
+    } catch (error) {
+      console.error("Restore failed:", error);
+      toast.error("Failed to restore user");
+    }
+  };
+
+  const handleStatusChange = async (userId: string, newStatus: boolean) => {
+    try {
+      setUpdatingStatus(userId);
+      const session = await getAdminSession();
+      if (!session.admin) {
+        toast.error("Admin session expired");
+        return;
+      }
+
+      const { success, error } = newStatus 
+        ? await adminActivateUser({ userId, adminId: session.admin.id })
+        : await adminDeactivateUser({ userId, adminId: session.admin.id });
+
+      if (success) {
+        toast.success(`User ${newStatus ? 'activated' : 'deactivated'} successfully`);
+        fetchUsers(); // Refresh the list
+      } else {
+        toast.error(error || `Failed to ${newStatus ? 'activate' : 'deactivate'} user`);
+        fetchUsers(); // Refresh to revert UI
+      }
+    } catch (error) {
+      console.error("Status update failed:", error);
+      toast.error("Failed to update user status");
+      fetchUsers(); // Refresh to revert UI
+    } finally {
+      setUpdatingStatus(null);
     }
   };
 
@@ -202,15 +269,40 @@ const AdminDashboard = () => {
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span
-                      className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                        user.is_active
-                          ? "bg-green-100 text-green-800"
-                          : "bg-red-100 text-red-800"
-                      }`}
-                    >
-                      {user.is_active ? "Active" : "Inactive"}
-                    </span>
+                    <div className="flex flex-col space-y-2">
+                      {/* Active/Inactive Status Dropdown */}
+                      <select
+                        value={user.is_active ? "active" : "inactive"}
+                        onChange={(e) => handleStatusChange(user.id, e.target.value === "active")}
+                        disabled={updatingStatus === user.id || user.is_deleted}
+                        className={`text-xs px-2 py-1 rounded border ${
+                          user.is_active 
+                            ? "bg-green-100 text-green-800 border-green-300" 
+                            : "bg-red-100 text-red-800 border-red-300"
+                        } ${(updatingStatus === user.id || user.is_deleted) ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+                      >
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                      </select>
+                      
+                      {/* Deletion Status with Debug Info */}
+                      <div className="flex items-center space-x-2">
+                        {user.is_deleted ? (
+                          <span className="inline-flex items-center px-2 py-1 text-xs font-semibold bg-red-100 text-red-800 rounded-full">
+                            <FaTimes className="mr-1" />
+                            Deleted
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-2 py-1 text-xs font-semibold bg-green-100 text-green-800 rounded-full">
+                            Active
+                          </span>
+                        )}
+                        {/* Debug info - remove in production */}
+                        <span className="text-xs text-gray-400">
+                          (deleted: {user.is_deleted ? 'true' : 'false'})
+                        </span>
+                      </div>
+                    </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     <div className="flex items-center">
@@ -245,13 +337,25 @@ const AdminDashboard = () => {
                         <FaEdit className="mr-1" />
                         Edit
                       </button>
-                      <button
-                        onClick={() => handleDelete(user.id)}
-                        className="text-red-600 hover:text-red-900 bg-red-50 px-3 py-1 rounded-md text-sm flex items-center"
-                      >
-                        <FaTrash className="mr-1" />
-                        Delete
-                      </button>
+                      
+                      {user.is_deleted ? (
+                        <button
+                          onClick={() => handleRestore(user.id)}
+                          className="text-green-600 hover:text-green-900 bg-green-50 px-3 py-1 rounded-md text-sm flex items-center"
+                        >
+                          <FaUndo className="mr-1" />
+                          Restore
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleDelete(user.id)}
+                          className="text-red-600 hover:text-red-900 bg-red-50 px-3 py-1 rounded-md text-sm flex items-center"
+                        >
+                          <FaTrash className="mr-1" />
+                          Delete
+                        </button>
+                      )}
+                      
                       <button
                         onClick={() => handleManageFunds(user.id)}
                         className="text-green-600 hover:text-green-900 bg-green-50 px-3 py-1 rounded-md text-sm flex items-center"

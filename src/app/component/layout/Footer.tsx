@@ -253,8 +253,8 @@ const Footer = () => {
               <li className="flex items-start gap-3 group hover:text-teal-400 transition-colors">
                 <FaMapMarkerAlt className="text-teal-400 mt-1 flex-shrink-0 group-hover:scale-110 transition-transform" />
                 <div>
-                  <div className="font-medium">27 Frankley Road</div>
-                  <div className="text-sm text-gray-400">New Plymouth Central, New Zealand</div>
+                  <div className="font-medium">11 Beachside Parade</div>
+                  <div className="text-sm text-gray-400">Sunshine Coast QLD 4551, Australia</div>
                 </div>
               </li>
             </ul>
@@ -275,7 +275,7 @@ const Footer = () => {
               <span className="text-teal-400 ml-1">Alpha Capital Limited</span>
             </p>
             <p className="text-xs mt-1 text-gray-500">
-              Registered at 27 Frankley Road, New Plymouth Central, New Zealand
+              11 Beachside Parade, Sunshine Coast QLD 4551, Australia
             </p>
           </div>
           
