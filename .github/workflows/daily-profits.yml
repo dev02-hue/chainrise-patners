@@ -12,7 +12,7 @@ jobs:
     steps:
       - name: Call Daily Profits API
         run: |
-          response=$(curl -s -w "\n%{http_code}" -X POST "${{ secrets.NEXTJS_APP_URL }}/api/cron/daily-profits/" \
+          response=$(curl -s -w "\n%{http_code}" -X POST "${{ secrets.NEXTJS_APP_URL }}api/cron/daily-profits/" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             -H "Content-Type: application/json" \
             --location)  # This follows redirects
