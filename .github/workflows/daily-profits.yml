@@ -12,9 +12,10 @@ jobs:
     steps:
       - name: Call Daily Profits API
         run: |
-          response=$(curl -s -w "\n%{http_code}" -X POST "${{ secrets.NEXTJS_APP_URL }}/api/cron/daily-profits" \
+          response=$(curl -s -w "\n%{http_code}" -X POST "${{ secrets.NEXTJS_APP_URL }}/api/cron/daily-profits/" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-            -H "Content-Type: application/json")
+            -H "Content-Type: application/json" \
+            --location)  # This follows redirects
           
           body=$(echo "$response" | head -n 1)
           status_code=$(echo "$response" | tail -n 1)
@@ -23,7 +24,7 @@ jobs:
           echo "Response body: $body"
           
           if [ "$status_code" -ne 200 ]; then
-            echo "❌ API call failed"
+            echo "❌ API call failed with status $status_code"
             exit 1
           else
             echo "✅ API call successful"
