@@ -7,7 +7,7 @@ import {
   FiHome, 
   FiUser, 
   FiDollarSign, 
-  FiTrendingUp, 
+  // FiTrendingUp, 
   FiCreditCard, 
   FiActivity, 
   FiMenu,
@@ -85,14 +85,14 @@ const navItems = [
       { name: "New Deposit", href: "/user/deposit-new", icon: <FiDollarSign size={16} /> },
     ],
   },
-  {
-    name: "Investment",
-    icon: <FiTrendingUp className="text-lg" />,
-    dropdown: [
-      { name: "All Investment", href: "/user/investment-all", icon: <FiActivity size={16} /> },
-      { name: "New Investment", href: "/user/investment-new", icon: <FiTrendingUp size={16} /> },
-    ],
-  },
+  // {
+  //   name: "Investment",
+  //   icon: <FiTrendingUp className="text-lg" />,
+  //   dropdown: [
+  //     { name: "All Investment", href: "/user/investment-all", icon: <FiActivity size={16} /> },
+  //     { name: "New Investment", href: "/user/investment-new", icon: <FiTrendingUp size={16} /> },
+  //   ],
+  // },
   {
     name: "Withdrawal",
     icon: <FiCreditCard className="text-lg" />,

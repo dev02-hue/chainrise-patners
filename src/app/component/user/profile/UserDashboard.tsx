@@ -16,13 +16,9 @@ import {
 } from 'react-icons/fi';
 import {
   getTotalDeposit,
-  getTotalInvestment,
   getTotalCompletedWithdrawal,
-  getTotalPendingWithdrawal,
  
 } from '@/lib/balance';
- 
- 
 import { getProfileData, getUserDashboardStats } from '@/lib/getProfileData';
 import { getSession } from '@/lib/auth';
 import TransactionsTableNoBalance from '../layout/TransactionsTableNoBalance';
@@ -67,54 +63,54 @@ const UserDashboard: React.FC = () => {
           throw new Error('User ID not found in session');
         }
 
+        // Fetch only the data we need from specific sources
         const [
           profileData,
           totalDeposit,
-          totalInvestment,
           totalCompletedWithdrawal,
-          totalPendingWithdrawal,
           dashboardStats
         ] = await Promise.all([
-          getProfileData(),
-          getTotalDeposit(),
-          getTotalInvestment(),
-          getTotalCompletedWithdrawal(),
-          getTotalPendingWithdrawal(),
-          getUserDashboardStats()
+          getProfileData(), // For balance, total_earnings, total_invested
+          getTotalDeposit(), // For total deposits
+          getTotalCompletedWithdrawal(), // For total withdrawals
+          getUserDashboardStats() // For pending withdrawals only
         ]);
 
         if (profileData.error || !profileData.data) {
           throw new Error(profileData.error || 'Failed to fetch profile data');
         }
 
-        const referralCode = profileData.data.referralCode || generateReferralCode();
+        const profile = profileData.data;
+        
+        // Get financial fields ONLY from getProfileData
+        const balance = profile.balance || 0;
+        const totalEarnings = profile.totalEarnings || 0;
+        const totalInvested = profile.totalInvested || 0;
+
+        const referralCode = profile.referralCode || generateReferralCode();
         const referralLink = `${window.location.origin}/signup?ref_id=${referralCode}`;
 
         setUser({
-          username: profileData.data.username || 'User',
+          username: profile.username || 'User',
           referralLink: referralLink,
           referralCode: referralCode,
         });
 
-        const stats = dashboardStats?.data || {
-          totalBalance: profileData.data.balance || 0,
-          totalEarnings: 0,
-          totalInvested: totalInvestment,
-          activeInvestments: 0,
-          pendingDeposits: 0,
-          pendingWithdrawals: totalPendingWithdrawal,
-        };
+        // Get pending withdrawals from dashboardStats
+        const pendingWithdrawal = dashboardStats?.data?.pendingWithdrawals || 0;
+        const activeInvestments = dashboardStats?.data?.activeInvestments || 0;
+        const pendingDeposits = dashboardStats?.data?.pendingDeposits || 0;
 
         const finalUserStats = {
-          balance: stats.totalBalance,
-          totalDeposit: totalDeposit,
-          currentInvestment: stats.totalInvested,
-          totalBonus: stats.totalEarnings,
-          totalWithdrawal: totalCompletedWithdrawal,
-          pendingWithdrawal: stats.pendingWithdrawals,
-          totalEarnings: stats.totalEarnings,
-          activeInvestments: stats.activeInvestments,
-          pendingDeposits: stats.pendingDeposits,
+          balance: balance, // From getProfileData
+          totalDeposit: totalDeposit, // From getTotalDeposit
+          currentInvestment: totalInvested, // From getProfileData
+          totalBonus: totalEarnings, // From getProfileData
+          totalWithdrawal: totalCompletedWithdrawal, // From getTotalCompletedWithdrawal
+          pendingWithdrawal: pendingWithdrawal, // From getUserDashboardStats
+          totalEarnings: totalEarnings, // From getProfileData
+          activeInvestments: activeInvestments, // From getUserDashboardStats
+          pendingDeposits: pendingDeposits, // From getUserDashboardStats
         };
 
         setUserStats(finalUserStats);
