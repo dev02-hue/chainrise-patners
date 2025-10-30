@@ -8,20 +8,7 @@ import { Deposit, DepositStatus,  UpdateProfileInput , Withdrawal, WithdrawalSta
 import { redirect } from "next/navigation";
 
 // Add this type definition near your other type definitions
-type ProfileData = {
-  name: string
-  username: string
-  email: string
-  balance?: number
-  phoneNumber: string
-  btcAddress?: string
-  bnbAddress?: string
-  dodgeAddress?: string
-  ethAddress?: string
-  solanaAddress?: string
-  usdttrc20Address?: string
-  referralCode?: string
-}
+ 
 
 
 
@@ -48,19 +35,44 @@ export async function getProfileData(): Promise<{ data?: ProfileData; error?: st
     console.log('📡 [getProfileData] Fetching profile for user ID:', session.user.id);
     console.log('📡 [getProfileData] User email:', session.user.email);
 
+    // Fetch complete profile schema including all financial fields
     const { data: profile, error } = await supabase
       .from('chainrise_profile')
       .select(`
+        id,
         name,
         username,
         email,
         phone_number,
+        referral_code,
+        referred_by,
+        balance,
+        total_earnings,
+        total_invested,
+        total_deposited,
+        total_bonus,
+        total_penalty,
+        referral_commission,
         btc_address,
         bnb_address,
         dodge_address,
         eth_address,
         solana_address,
-        usdttrc20_address
+        usdttrc20_address,
+        is_verified,
+        is_active,
+        is_admin,
+        is_banned,
+        is_deleted,
+        last_login,
+        created_at,
+        updated_at,
+        banned_at,
+        deleted_at,
+        deletion_reason,
+        auth_user_id,
+        auth_update_success,
+        auth_restore_success
       `)
       .eq('id', session.user.id)
       .single();
@@ -72,7 +84,7 @@ export async function getProfileData(): Promise<{ data?: ProfileData; error?: st
     if (error?.code === 'PGRST116' || !profile) {
       console.warn('⚠️ [getProfileData] No profile found — creating one automatically...');
       
-      // Create a default profile
+      // Create a default profile with all financial fields
       const { error: insertError } = await supabase
         .from('chainrise_profile')
         .insert({
@@ -80,11 +92,25 @@ export async function getProfileData(): Promise<{ data?: ProfileData; error?: st
           email: session.user.email,
           name: session.user.user_metadata?.full_name || session.user.user_metadata?.name || 'User',
           username: session.user.user_metadata?.username || `user_${session.user.id.slice(0, 8)}`,
+          // Financial fields
           balance: 0,
           total_earnings: 0,
           total_invested: 0,
+          total_deposited: 0,
+          total_bonus: 0,
+          total_penalty: 0,
+          referral_commission: 0,
+          // Status fields
+          is_verified: false,
+          is_active: true,
+          is_admin: false,
+          is_banned: false,
+          is_deleted: false,
+          // Timestamps
           created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
+          // Generate referral code if not exists
+          referral_code: session.user.user_metadata?.referral_code || `ref_${session.user.id.slice(0, 8)}`
         });
 
       console.log('📝 [getProfileData] Profile creation result:', { insertError });
@@ -99,16 +125,40 @@ export async function getProfileData(): Promise<{ data?: ProfileData; error?: st
       const { data: newProfile, error: newError } = await supabase
         .from('chainrise_profile')
         .select(`
+          id,
           name,
           username,
           email,
           phone_number,
+          referral_code,
+          referred_by,
+          balance,
+          total_earnings,
+          total_invested,
+          total_deposited,
+          total_bonus,
+          total_penalty,
+          referral_commission,
           btc_address,
           bnb_address,
           dodge_address,
           eth_address,
           solana_address,
-          usdttrc20_address
+          usdttrc20_address,
+          is_verified,
+          is_active,
+          is_admin,
+          is_banned,
+          is_deleted,
+          last_login,
+          created_at,
+          updated_at,
+          banned_at,
+          deleted_at,
+          deletion_reason,
+          auth_user_id,
+          auth_update_success,
+          auth_restore_success
         `)
         .eq('id', session.user.id)
         .single();
@@ -120,19 +170,7 @@ export async function getProfileData(): Promise<{ data?: ProfileData; error?: st
         return { error: 'Failed to fetch profile data after creation' };
       }
 
-      const formattedProfile: ProfileData = {
-        name: newProfile.name,
-        username: newProfile.username,
-        email: newProfile.email,
-        phoneNumber: newProfile.phone_number,
-        btcAddress: newProfile.btc_address,
-        bnbAddress: newProfile.bnb_address,
-        dodgeAddress: newProfile.dodge_address,
-        ethAddress: newProfile.eth_address,
-        solanaAddress: newProfile.solana_address,
-        usdttrc20Address: newProfile.usdttrc20_address,
-      };
-
+      const formattedProfile: ProfileData = formatProfileData(newProfile);
       console.log('🎉 [getProfileData] Successfully created and formatted profile:', formattedProfile);
       return { data: formattedProfile };
     }
@@ -142,19 +180,7 @@ export async function getProfileData(): Promise<{ data?: ProfileData; error?: st
       return { error: 'Failed to fetch profile data' };
     }
 
-    const formattedProfile: ProfileData = {
-      name: profile.name,
-      username: profile.username,
-      email: profile.email,
-      phoneNumber: profile.phone_number,
-      btcAddress: profile.btc_address,
-      bnbAddress: profile.bnb_address,
-      dodgeAddress: profile.dodge_address,
-      ethAddress: profile.eth_address,
-      solanaAddress: profile.solana_address,
-      usdttrc20Address: profile.usdttrc20_address,
-    };
-
+    const formattedProfile: ProfileData = formatProfileData(profile);
     console.log('🎉 [getProfileData] Successfully fetched and formatted profile:', formattedProfile);
     return { data: formattedProfile };
   } catch (err) {
@@ -162,6 +188,110 @@ export async function getProfileData(): Promise<{ data?: ProfileData; error?: st
     return { error: 'An unexpected error occurred' };
   }
 }
+
+// Helper function to format profile data with all fields
+function formatProfileData(profile: any): ProfileData {
+  return {
+    // Basic info
+    id: profile.id,
+    name: profile.name,
+    username: profile.username,
+    email: profile.email,
+    phoneNumber: profile.phone_number,
+    
+    // Financial fields
+    balance: profile.balance || 0,
+    totalEarnings: profile.total_earnings || 0,
+    totalInvested: profile.total_invested || 0,
+    totalDeposited: profile.total_deposited || 0,
+    totalBonus: profile.total_bonus || 0,
+    totalPenalty: profile.total_penalty || 0,
+    referralCommission: profile.referral_commission || 0,
+    
+    // Referral system
+    referralCode: profile.referral_code,
+    referredBy: profile.referred_by,
+    
+    // Wallet addresses
+    btcAddress: profile.btc_address,
+    bnbAddress: profile.bnb_address,
+    dodgeAddress: profile.dodge_address,
+    ethAddress: profile.eth_address,
+    solanaAddress: profile.solana_address,
+    usdttrc20Address: profile.usdttrc20_address,
+    
+    // Account status
+    isVerified: profile.is_verified || false,
+    isActive: profile.is_active !== undefined ? profile.is_active : true,
+    isAdmin: profile.is_admin || false,
+    isBanned: profile.is_banned || false,
+    isDeleted: profile.is_deleted || false,
+    
+    // Timestamps
+    lastLogin: profile.last_login,
+    createdAt: profile.created_at,
+    updatedAt: profile.updated_at,
+    bannedAt: profile.banned_at,
+    deletedAt: profile.deleted_at,
+    
+    // Additional fields
+    deletionReason: profile.deletion_reason,
+    authUserId: profile.auth_user_id,
+    authUpdateSuccess: profile.auth_update_success,
+    authRestoreSuccess: profile.auth_restore_success
+  };
+}
+
+// Update your ProfileData type to include all fields
+export type ProfileData = {
+  // Basic info
+  id?: string;
+  name: string;
+  username: string;
+  email: string;
+  phoneNumber: string;
+  
+  // Financial fields
+  balance?: number;
+  totalEarnings?: number;
+  totalInvested?: number;
+  totalDeposited?: number;
+  totalBonus?: number;
+  totalPenalty?: number;
+  referralCommission?: number;
+  
+  // Referral system
+  referralCode?: string;
+  referredBy?: string;
+  
+  // Wallet addresses
+  btcAddress?: string;
+  bnbAddress?: string;
+  dodgeAddress?: string;
+  ethAddress?: string;
+  solanaAddress?: string;
+  usdttrc20Address?: string;
+  
+  // Account status
+  isVerified?: boolean;
+  isActive?: boolean;
+  isAdmin?: boolean;
+  isBanned?: boolean;
+  isDeleted?: boolean;
+  
+  // Timestamps
+  lastLogin?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  bannedAt?: string;
+  deletedAt?: string;
+  
+  // Additional fields
+  deletionReason?: string;
+  authUserId?: string;
+  authUpdateSuccess?: boolean;
+  authRestoreSuccess?: boolean;
+};
 /**
  * Updates the user's profile information including wallet addresses
  */

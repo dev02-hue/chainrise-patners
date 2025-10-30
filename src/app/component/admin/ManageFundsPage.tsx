@@ -19,7 +19,8 @@ import {
   FaMoneyBillWave,
   FaCoins,
   FaExclamationTriangle,
-  FaCheckCircle
+  FaCheckCircle,
+  FaInfoCircle
 } from "react-icons/fa";
 import { 
   getUserMetrics, 
@@ -47,9 +48,10 @@ interface UserMetrics {
 interface FundingFormData {
   amount: string;
   cryptoType: string;
-  transactionType: "bonus" | "deposit" | "refund" | "correction";
+  transactionType: "bonus" | "add_funds_with_fee" | "earnings";
   description: string;
   sendEmailNotification: boolean;
+  investmentPlan?: "not_a_deposit" | "plan_1" | "plan_2" | "plan_3" | "plan_4";
 }
 
 const ManageFundsPage = () => {
@@ -71,8 +73,17 @@ const ManageFundsPage = () => {
     cryptoType: "BTC",
     transactionType: "bonus",
     description: "",
-    sendEmailNotification: true
+    sendEmailNotification: true,
+    investmentPlan: "not_a_deposit"
   });
+
+  // Investment plan configurations
+  const investmentPlans = {
+    plan_1: { min: 100, max: 2999, percentage: 2.20 },
+    plan_2: { min: 3000, max: 9999, percentage: 4.40 },
+    plan_3: { min: 10000, max: 29999, percentage: 6.60 },
+    plan_4: { min: 30000, max: 59999, percentage: 8.80 }
+  };
 
   useEffect(() => {
     fetchAdminSession();
@@ -122,6 +133,54 @@ const ManageFundsPage = () => {
 
   const handleAddBonus = () => {
     setShowFundingForm(true);
+    // Reset form to bonus defaults
+    setFundingData({
+      amount: "",
+      cryptoType: "BTC",
+      transactionType: "bonus",
+      description: "",
+      sendEmailNotification: true,
+      investmentPlan: "not_a_deposit"
+    });
+  };
+
+  const handleTransactionTypeChange = (newType: "bonus" | "add_funds_with_fee" | "earnings") => {
+    const updatedData: FundingFormData = {
+      ...fundingData,
+      transactionType: newType
+    };
+
+    // Set default investment plan based on transaction type
+    if (newType === "bonus") {
+      updatedData.investmentPlan = "not_a_deposit";
+    } else if (newType === "add_funds_with_fee") {
+      updatedData.investmentPlan = "plan_1"; // Default plan for add funds
+    } else {
+      updatedData.investmentPlan = undefined; // No plan for earnings
+    }
+
+    setFundingData(updatedData);
+  };
+
+  const validateInvestmentPlanAmount = (plan: string, amount: number): { valid: boolean; error?: string } => {
+    if (plan === "not_a_deposit") {
+      return { valid: true };
+    }
+
+    const planConfig = investmentPlans[plan as keyof typeof investmentPlans];
+    if (!planConfig) {
+      return { valid: false, error: "Invalid investment plan" };
+    }
+
+    if (amount < planConfig.min) {
+      return { valid: false, error: `Amount must be at least $${planConfig.min} for ${plan.replace('_', ' ').toUpperCase()}` };
+    }
+
+    if (amount > planConfig.max) {
+      return { valid: false, error: `Amount cannot exceed $${planConfig.max} for ${plan.replace('_', ' ').toUpperCase()}` };
+    }
+
+    return { valid: true };
   };
 
   const handleFundUser = async () => {
@@ -140,22 +199,46 @@ const ManageFundsPage = () => {
       return;
     }
 
+    const amount = parseFloat(fundingData.amount);
+
+    // Validate investment plan if applicable
+    if (fundingData.transactionType === "add_funds_with_fee" && fundingData.investmentPlan) {
+      const validation = validateInvestmentPlanAmount(fundingData.investmentPlan, amount);
+      if (!validation.valid) {
+        toast.error(validation.error);
+        return;
+      }
+    }
+
+    // Validate bonus must use "not_a_deposit"
+    if (fundingData.transactionType === "bonus" && fundingData.investmentPlan !== "not_a_deposit") {
+      toast.error("Bonus transactions must use 'Not a Deposit' plan");
+      return;
+    }
+
     setFundingLoading(true);
 
     try {
       const result = await adminFundUser({
         userId,
-        amount: parseFloat(fundingData.amount),
+        amount: amount,
         cryptoType: fundingData.cryptoType,
         transactionType: fundingData.transactionType,
         description: fundingData.description,
         sendEmailNotification: fundingData.sendEmailNotification,
-        adminId: adminId
+        adminId: adminId,
+        investmentPlan: fundingData.investmentPlan
       });
 
       if (result.success) {
+        const transactionTypeLabels = {
+          bonus: "Bonus",
+          add_funds_with_fee: "Add Funds with Fee",
+          earnings: "Earnings"
+        };
+
         toast.success(
-          `Successfully added $${fundingData.amount} ${fundingData.transactionType} to user account`,
+          `Successfully added $${fundingData.amount} ${transactionTypeLabels[fundingData.transactionType]} to user account`,
           {
             description: fundingData.description
           }
@@ -166,7 +249,8 @@ const ManageFundsPage = () => {
           cryptoType: "BTC",
           transactionType: "bonus",
           description: "",
-          sendEmailNotification: true
+          sendEmailNotification: true,
+          investmentPlan: "not_a_deposit"
         });
         await fetchUserMetrics(); // Refresh metrics
       } else {
@@ -252,6 +336,19 @@ const ManageFundsPage = () => {
     }).format(amount);
   };
 
+  const getFinancialFieldInfo = (transactionType: string): { field: string; description: string } => {
+    switch (transactionType) {
+      case "bonus":
+        return { field: "Balance", description: "Amount will be added to user's available balance" };
+      case "add_funds_with_fee":
+        return { field: "Total Invested", description: "Amount will be added to user's total invested amount" };
+      case "earnings":
+        return { field: "Total Earnings", description: "Amount will be added to user's total earnings" };
+      default:
+        return { field: "Balance", description: "Amount will be added to user's available balance" };
+    }
+  };
+
   const getMetricColor = (key: string): string => {
     const colors: { [key: string]: string } = {
       balance: "text-green-600 bg-green-50 border-green-200",
@@ -321,6 +418,8 @@ const ManageFundsPage = () => {
     { key: "total_penalty", label: "Total Penalty", value: metrics.total_penalty, editable: true },
     { key: "referral_commission", label: "Referral Commission", value: metrics.referral_commission, editable: true },
   ];
+
+  const financialFieldInfo = getFinancialFieldInfo(fundingData.transactionType);
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">
@@ -481,124 +580,188 @@ const ManageFundsPage = () => {
       </div>
 
       {/* Funding Form Modal */}
-      {showFundingForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md transform transition-all">
-            <div className="p-6 border-b border-gray-200">
-              <h3 className="text-xl font-semibold text-gray-900">Add Funds</h3>
-              <p className="text-gray-600 text-sm mt-1">
-                Add funds to {metrics.username}&apos;s account
+    {showFundingForm && (
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 backdrop-blur-sm overflow-y-auto">
+    <div className="bg-white rounded-xl shadow-2xl w-full max-w-md mx-auto my-8 transform transition-all">
+      {/* Header */}
+      <div className="p-4 sm:p-6 border-b border-gray-200">
+        <h3 className="text-lg sm:text-xl font-semibold text-gray-900">Add Funds</h3>
+        <p className="text-gray-600 text-sm mt-1">
+          Add funds to {metrics.username}&apos;s account
+        </p>
+      </div>
+      
+      {/* Form Content */}
+      <div className="p-4 sm:p-6 space-y-4 max-h-[calc(100vh-200px)] overflow-y-auto">
+        {/* Transaction Type */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Transaction Type
+          </label>
+          <select
+            value={fundingData.transactionType}
+            onChange={(e) => handleTransactionTypeChange(e.target.value as any)}
+            className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-colors"
+          >
+            <option value="bonus">Bonus</option>
+            <option value="add_funds_with_fee">Add Funds with Fee</option>
+            <option value="earnings">Earnings</option>
+          </select>
+        </div>
+
+        {/* Financial Field Info */}
+        <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+          <div className="flex items-start gap-2">
+            <FaInfoCircle className="text-blue-600 mt-0.5 flex-shrink-0 text-sm sm:text-base" />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-blue-900 break-words">
+                Will update: {financialFieldInfo.field}
               </p>
-            </div>
-            
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Amount (USD)
-                </label>
-                <input
-                  type="number"
-                  value={fundingData.amount}
-                  onChange={(e) => setFundingData({ ...fundingData, amount: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-colors"
-                  placeholder="0.00"
-                  step="0.01"
-                  min="0.01"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Crypto Type
-                  </label>
-                  <select
-                    value={fundingData.cryptoType}
-                    onChange={(e) => setFundingData({ ...fundingData, cryptoType: e.target.value })}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-colors"
-                  >
-                    <option value="BTC">Bitcoin (BTC)</option>
-                    <option value="ETH">Ethereum (ETH)</option>
-                    <option value="BNB">Binance Coin (BNB)</option>
-                    <option value="DOGE">Dogecoin (DOGE)</option>
-                    <option value="SOL">Solana (SOL)</option>
-                    <option value="USDT">USDT (TRC20)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Type
-                  </label>
-                  <select
-                    value={fundingData.transactionType}
-                    onChange={(e) => setFundingData({ ...fundingData, transactionType: e.target.value as any })}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-colors"
-                  >
-                    <option value="bonus">Bonus</option>
-                    <option value="deposit">Deposit</option>
-                    <option value="refund">Refund</option>
-                    <option value="correction">Correction</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Description / Reason
-                </label>
-                <textarea
-                  value={fundingData.description}
-                  onChange={(e) => setFundingData({ ...fundingData, description: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-colors resize-none"
-                  placeholder="Provide a reason for this transaction..."
-                  rows={3}
-                />
-              </div>
-
-              <div className="flex items-center p-3 bg-gray-50 rounded-lg">
-                <input
-                  type="checkbox"
-                  id="emailNotification"
-                  checked={fundingData.sendEmailNotification}
-                  onChange={(e) => setFundingData({ ...fundingData, sendEmailNotification: e.target.checked })}
-                  className="h-4 w-4 text-emerald-600 focus:ring-emerald-500 border-gray-300 rounded"
-                />
-                <label htmlFor="emailNotification" className="ml-3 text-sm text-gray-700">
-                  Send email notification to user
-                </label>
-              </div>
-            </div>
-
-            <div className="flex justify-end space-x-3 p-6 border-t border-gray-200 bg-gray-50 rounded-b-xl">
-              <button
-                onClick={() => setShowFundingForm(false)}
-                disabled={fundingLoading}
-                className="px-6 py-2.5 text-gray-700 hover:text-gray-900 border border-gray-300 rounded-lg hover:bg-white disabled:opacity-50 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleFundUser}
-                disabled={fundingLoading || !fundingData.amount || !fundingData.description.trim()}
-                className="flex items-center gap-2 px-6 py-2.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                {fundingLoading ? (
-                  <>
-                    <FaSpinner className="animate-spin" />
-                    <span>Processing...</span>
-                  </>
-                ) : (
-                  <>
-                    <FaPlus />
-                    <span>Add Funds</span>
-                  </>
-                )}
-              </button>
+              <p className="text-xs text-blue-700 mt-1 break-words">
+                {financialFieldInfo.description}
+              </p>
             </div>
           </div>
         </div>
-      )}
+
+        {/* Investment Plan Selection (for add_funds_with_fee) */}
+        {fundingData.transactionType === "add_funds_with_fee" && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Investment Plan
+            </label>
+            <select
+              value={fundingData.investmentPlan || "plan_1"}
+              onChange={(e) => setFundingData({ ...fundingData, investmentPlan: e.target.value as any })}
+              className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-colors"
+            >
+              <option value="plan_1">Plan 1 ($100 - $2,999)</option>
+              <option value="plan_2">Plan 2 ($3,000 - $9,999)</option>
+              <option value="plan_3">Plan 3 ($10,000 - $29,999)</option>
+              <option value="plan_4">Plan 4 ($30,000 - $59,999)</option>
+            </select>
+            {fundingData.investmentPlan && fundingData.investmentPlan !== "not_a_deposit" && (
+              <p className="text-xs text-gray-500 mt-2 break-words">
+                Min: ${investmentPlans[fundingData.investmentPlan as keyof typeof investmentPlans]?.min.toLocaleString()} | 
+                Max: ${investmentPlans[fundingData.investmentPlan as keyof typeof investmentPlans]?.max.toLocaleString()}
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Investment Plan Display (for bonus - fixed to "not_a_deposit") */}
+        {fundingData.transactionType === "bonus" && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Investment Plan
+            </label>
+            <div className="px-3 sm:px-4 py-2.5 sm:py-3 bg-gray-100 border border-gray-300 rounded-lg text-gray-700 text-sm sm:text-base">
+              Not a Deposit
+            </div>
+            <p className="text-xs text-gray-500 mt-2 break-words">
+              Bonus transactions are automatically set to &apos;Not a Deposit&apos;
+            </p>
+          </div>
+        )}
+
+        {/* Amount Input */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Amount (USD) <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="number"
+            value={fundingData.amount}
+            onChange={(e) => setFundingData({ ...fundingData, amount: e.target.value })}
+            className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-colors"
+            placeholder="0.00"
+            step="0.01"
+            min="0.01"
+            required
+          />
+        </div>
+
+        {/* Crypto Type */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Crypto Type
+          </label>
+          <select
+            value={fundingData.cryptoType}
+            onChange={(e) => setFundingData({ ...fundingData, cryptoType: e.target.value })}
+            className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-colors"
+          >
+            <option value="BTC">Bitcoin (BTC)</option>
+            <option value="ETH">Ethereum (ETH)</option>
+            <option value="BNB">Binance Coin (BNB)</option>
+            <option value="DOGE">Dogecoin (DOGE)</option>
+            <option value="SOL">Solana (SOL)</option>
+            <option value="USDT">USDT (TRC20)</option>
+          </select>
+        </div>
+
+        {/* Description - Now Optional */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Description / Reason <span className="text-gray-500 text-xs">(Optional)</span>
+          </label>
+          <textarea
+            value={fundingData.description}
+            onChange={(e) => setFundingData({ ...fundingData, description: e.target.value })}
+            className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-colors resize-none"
+            placeholder="Provide a reason for this transaction (optional)..."
+            rows={3}
+          />
+          <p className="text-xs text-gray-500 mt-1">
+            Optional: Add a description for your records
+          </p>
+        </div>
+
+        {/* Email Notification */}
+        <div className="flex items-start p-3 bg-gray-50 rounded-lg">
+          <input
+            type="checkbox"
+            id="emailNotification"
+            checked={fundingData.sendEmailNotification}
+            onChange={(e) => setFundingData({ ...fundingData, sendEmailNotification: e.target.checked })}
+            className="h-4 w-4 text-emerald-600 focus:ring-emerald-500 border-gray-300 rounded mt-0.5 flex-shrink-0"
+          />
+          <label htmlFor="emailNotification" className="ml-3 text-sm text-gray-700 break-words">
+            Send email notification to user
+          </label>
+        </div>
+      </div>
+
+      {/* Footer Actions */}
+      <div className="flex flex-col sm:flex-row justify-end gap-2 sm:space-x-3 p-4 sm:p-6 border-t border-gray-200 bg-gray-50 rounded-b-xl">
+        <button
+          onClick={() => setShowFundingForm(false)}
+          disabled={fundingLoading}
+          className="order-2 sm:order-1 px-4 sm:px-6 py-2.5 text-gray-700 hover:text-gray-900 border border-gray-300 rounded-lg hover:bg-white disabled:opacity-50 transition-colors text-sm sm:text-base"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={handleFundUser}
+          disabled={fundingLoading || !fundingData.amount}
+          className="order-1 sm:order-2 flex items-center justify-center gap-2 px-4 sm:px-6 py-2.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm sm:text-base flex-1 sm:flex-initial"
+        >
+          {fundingLoading ? (
+            <>
+              <FaSpinner className="animate-spin text-sm sm:text-base" />
+              <span>Processing...</span>
+            </>
+          ) : (
+            <>
+              <FaPlus className="text-sm sm:text-base" />
+              <span>Add Funds</span>
+            </>
+          )}
+        </button>
+      </div>
+    </div>
+  </div>
+)}
     </div>
   );
 };

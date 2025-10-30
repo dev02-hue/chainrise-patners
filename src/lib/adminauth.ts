@@ -419,32 +419,59 @@ export async function adminFundUser({
   amount,
   cryptoType,
   transactionType = 'bonus',
-  description,
+  description, // Now optional
   sendEmailNotification = true,
-  adminId
+  adminId,
+  // New fields for investment plans
+  investmentPlan, // 'not_a_deposit' | 'plan_1' | 'plan_2' | 'plan_3' | 'plan_4'
+  // planDetails // Optional: Store plan-specific details
 }: {
   userId: string;
   amount: number;
   cryptoType: string;
-  transactionType?: 'bonus' | 'deposit' | 'refund' | 'correction';
-  description: string;
+  transactionType?: 'bonus' | 'add_funds_with_fee' | 'earnings';
+  description?: string; // Made optional
   sendEmailNotification?: boolean;
   adminId: string;
+  investmentPlan?: 'not_a_deposit' | 'plan_1' | 'plan_2' | 'plan_3' | 'plan_4';
+  planDetails?: any;
 }): Promise<{ success?: boolean; error?: string; depositId?: string; newBalance?: number }> {
   try {
     console.log('[adminFundUser] Starting admin funding process:', {
-      userId, amount, cryptoType, transactionType, description, adminId
+      userId, amount, cryptoType, transactionType, description, adminId, investmentPlan
     });
 
-    // 1. Use the database function to update balance (bypasses RLS)
+    // Validate investment plan selection based on transaction type
+    if (transactionType === 'bonus' && investmentPlan !== 'not_a_deposit') {
+      return { error: 'Bonus transactions must use "not a deposit" plan' };
+    }
+
+    if (transactionType === 'add_funds_with_fee' && !investmentPlan) {
+      return { error: 'Add funds with fee requires selecting an investment plan' };
+    }
+
+    if (transactionType === 'earnings' && investmentPlan) {
+      return { error: 'Earnings transactions should not use investment plans' };
+    }
+
+    // Validate amount against investment plan limits if applicable
+    if (investmentPlan && investmentPlan !== 'not_a_deposit') {
+      const planValidation = validateInvestmentPlanAmount(investmentPlan, amount);
+      if (!planValidation.valid) {
+        return { error: planValidation.error };
+      }
+    }
+
+    // 1. Use the database function to update balance and financial fields
     console.log('[adminFundUser] Calling database function...');
     
-    const { data: dbResult, error: rpcError } = await supabase.rpc('admin_update_user_balance', {
+    const { data: dbResult, error: rpcError } = await supabase.rpc('admin_update_user_financials', {
       target_user_id: userId,
       admin_user_id: adminId,
       amount_to_add: amount,
       transaction_type: transactionType,
-      description_text: description
+      description_text: description || null, // Handle optional description
+      investment_plan: investmentPlan
     });
 
     console.log('[adminFundUser] Database function result:', { dbResult, rpcError });
@@ -461,15 +488,20 @@ export async function adminFundUser({
 
     if (!dbResult?.success) {
       console.error('[adminFundUser] Database function did not return success');
-      return { error: 'Balance update failed unexpectedly' };
+      return { error: 'Financial update failed unexpectedly' };
     }
 
-    console.log('[adminFundUser] Balance updated successfully via database function:', dbResult);
+    console.log('[adminFundUser] Financial fields updated successfully:', dbResult);
 
-    // 2. Create deposit record
+    // 2. Create deposit record with new fields
     const reference = `ADM-${transactionType.toUpperCase()}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
     
     console.log('[adminFundUser] Creating deposit record...');
+    
+    // Create admin notes with optional description
+    const adminNotes = description 
+      ? `Admin ${transactionType}: ${description} | By: ${adminId}`
+      : `Admin ${transactionType} | By: ${adminId}`;
     
     const { data: deposit, error: depositError } = await supabase
       .from('chainrise_deposits')
@@ -481,18 +513,20 @@ export async function adminFundUser({
         reference,
         status: 'completed',
         processed_at: new Date().toISOString(),
-        admin_notes: `Admin funding: ${description} | By: ${adminId}`,
+        admin_notes: adminNotes, // Uses the conditional admin notes
         is_admin_funded: true,
         admin_id: adminId,
-        transaction_type: transactionType
+        transaction_type: transactionType,
+        // investment_plan: investmentPlan,
+        // plan_details: planDetails,
+        // Store which financial field was updated
+        financial_field_updated: getFinancialFieldForTransaction(transactionType)
       }])
       .select()
       .single();
 
     if (depositError || !deposit) {
       console.error('[adminFundUser] Deposit creation failed:', depositError);
-      
-      // Note: We can't easily rollback the database function, but the deposit is the audit trail
       return { error: 'Failed to create funding record: ' + depositError?.message };
     }
 
@@ -501,6 +535,11 @@ export async function adminFundUser({
     // 3. Record transaction
     console.log('[adminFundUser] Recording transaction...');
     
+    // Create transaction description with optional description
+    const transactionDescription = description 
+      ? `Admin ${transactionType}: ${description}`
+      : `Admin ${transactionType}`;
+    
     const { error: transactionError } = await supabase
       .from('chainrise_transactions')
       .insert({
@@ -508,16 +547,22 @@ export async function adminFundUser({
         type: 'admin_funding',
         amount: amount,
         currency: 'USD',
-        description: `Admin ${transactionType}: ${description}`,
+        description: transactionDescription, // Uses the conditional description
         reference: reference,
         status: 'completed',
         metadata: {
           deposit_id: deposit.id,
           admin_id: adminId,
           transaction_type: transactionType,
-          description: description,
+          investment_plan: investmentPlan,
+          description: description || null, // Handle optional description
           previous_balance: dbResult.previous_balance,
-          new_balance: dbResult.new_balance
+          new_balance: dbResult.new_balance,
+          financial_field_updated: getFinancialFieldForTransaction(transactionType),
+          previous_total_invested: dbResult.previous_total_invested,
+          new_total_invested: dbResult.new_total_invested,
+          previous_total_earnings: dbResult.previous_total_earnings,
+          new_total_earnings: dbResult.new_total_earnings
         }
       });
 
@@ -525,16 +570,17 @@ export async function adminFundUser({
       console.error('[adminFundUser] Transaction record failed:', transactionError);
     }
 
-    // 4. Send notification
+    // 4. Send notification (only if description exists or use default message)
     if (sendEmailNotification) {
       console.log('[adminFundUser] Sending notification...');
       await sendAdminFundingNotificationToUser({
         userId,
         amount,
         transactionType,
-        description,
+        description: description || `Admin ${transactionType} of $${amount}`, // Provide default if no description
         reference,
-        adminId
+        adminId,
+        // investmentPlan
       });
     }
 
@@ -548,6 +594,46 @@ export async function adminFundUser({
     console.error('[adminFundUser] Unexpected error:', err);
     return { error: 'An unexpected error occurred: ' + (err instanceof Error ? err.message : 'Unknown error') };
   }
+}
+
+// Helper function to determine which financial field to update
+function getFinancialFieldForTransaction(transactionType: string): string {
+  switch (transactionType) {
+    case 'bonus':
+      return 'balance';
+    case 'add_funds_with_fee':
+      return 'total_invested';
+    case 'earnings':
+      return 'total_earnings';
+    default:
+      return 'balance';
+  }
+}
+
+// Helper function to validate investment plan amounts
+function validateInvestmentPlanAmount(plan: string, amount: number): { valid: boolean; error?: string } {
+  const planLimits = {
+    plan_1: { min: 100, max: 2999 },
+    plan_2: { min: 3000, max: 9999 },
+    plan_3: { min: 10000, max: 29999 },
+    plan_4: { min: 30000, max: 59999 }
+  };
+
+  const limits = planLimits[plan as keyof typeof planLimits];
+  
+  if (!limits) {
+    return { valid: false, error: 'Invalid investment plan' };
+  }
+
+  if (amount < limits.min) {
+    return { valid: false, error: `Amount must be at least $${limits.min} for ${plan}` };
+  }
+
+  if (amount > limits.max) {
+    return { valid: false, error: `Amount cannot exceed $${limits.max} for ${plan}` };
+  }
+
+  return { valid: true };
 }
 
 
@@ -865,6 +951,7 @@ async function sendAdminFundingNotificationToUser(params: {
   description: string;
   reference: string;
   adminId: string;
+  
 }) {
   try {
     const { data: user } = await supabase
@@ -1769,6 +1856,4 @@ async function sendEmailUpdateNotification(params: {
   }
 }
 
-
-// Add these to your adminauth.ts file
  

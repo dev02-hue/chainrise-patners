@@ -38,10 +38,18 @@ export async function POST(request: NextRequest) {
     // Call your existing function
     const result = await calculateDailyProfits();
 
+    // Add detailed logging
+    console.log('📊 API calculateDailyProfits result:', JSON.stringify(result, null, 2));
+
     if (result.error) {
-      console.error('❌ Error calculating daily profits:', result.error);
+      console.error('❌ Error calculating daily profits via API:', result.error);
+      
       return NextResponse.json(
-        { error: result.error },
+        { 
+          error: result.error,
+          details: result.data, // This will include the detailed error info
+          timestamp: new Date().toISOString()
+        },
         { status: 500 }
       );
     }
@@ -50,13 +58,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ 
       success: true, 
       message: 'Daily profits calculated successfully',
+      data: result.data,
       timestamp: new Date().toISOString()
     });
 
   } catch (error) {
     console.error('💥 Unexpected error in daily profits API:', error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { 
+        error: 'Internal server error',
+        details: error instanceof Error ? error.message : 'Unknown error',
+        timestamp: new Date().toISOString()
+      },
       { status: 500 }
     );
   }
