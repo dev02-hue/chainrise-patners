@@ -3,7 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
  
 import LayoutWrapper from "./component/layout/LayoutWrapper";
-  import TawkToScript from "./component/layout/TawkToScript";
+ 
 import SmartsuppScript from "./component/layout/TawkToScript";
 
 const geistSans = Geist({
