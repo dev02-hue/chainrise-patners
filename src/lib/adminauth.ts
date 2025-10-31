@@ -1012,76 +1012,63 @@ export async function adminBanUser({
   reason?: string;
 }): Promise<{ success?: boolean; error?: string }> {
   try {
-    console.log('[adminBanUser] Starting ban process:', { userId, adminId, reason });
+    console.log('🔨 [adminBanUser] Starting ban process:', { userId, adminId, reason });
 
-    // 1. Verify admin privileges
-    const { data: admin, error: adminError } = await supabase
-      .from('chainrise_profile')
-      .select('is_admin')
-      .eq('id', adminId)
-      .single();
-
-    if (adminError || !admin || !admin.is_admin) {
-      console.error('[adminBanUser] Admin verification failed:', adminError);
-      return { error: 'Unauthorized: Admin privileges required' };
+    // 1. Verify admin privileges and target user
+    const verification = await verifyAdminAndTargetUser(adminId, userId);
+    if (verification.error) {
+      return { error: verification.error };
     }
 
-    // 2. Verify target user exists and is not already banned
-    const { data: user, error: userError } = await supabase
-      .from('chainrise_profile')
-      .select('id, username, email, is_banned')
-      .eq('id', userId)
-      .single();
+    const { admin, user } = verification;
 
-    if (userError || !user) {
-      console.error('[adminBanUser] User verification failed:', userError);
-      return { error: 'User not found' };
-    }
-
+    // 2. Check if user is already banned
     if (user.is_banned) {
       return { error: 'User is already banned' };
     }
 
-    // 3. Update user ban status
-    const { error: updateError } = await supabase
-      .from('chainrise_profile')
-      .update({
-        is_banned: true,
+    // 3. Update user ban status using RPC for better security
+    const { error: updateError } = await supabase.rpc('admin_update_user_status', {
+      target_user_id: userId,
+      admin_user_id: adminId,
+      status_field: 'is_banned',
+      status_value: true,
+      additional_data: {
         banned_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', userId);
-
-    if (updateError) {
-      console.error('[adminBanUser] Ban update failed:', updateError);
-      return { error: 'Failed to ban user' };
-    }
-
-    // 4. Record ban action in admin logs (optional but recommended)
-    await supabase
-      .from('chainrise_admin_actions')
-      .insert({
-        admin_id: adminId,
-        user_id: userId,
-        action_type: 'ban',
-        description: `User banned: ${reason}`,
-        metadata: {
-          reason: reason,
-          previous_status: 'active'
-        }
-      });
-
-    // 5. Send notification to user (optional)
-    await sendUserBanNotification({
-      userId,
-      reason,
-      adminId
+        banned_reason: reason
+      }
     });
 
-    console.log('[adminBanUser] User banned successfully');
+    if (updateError) {
+      console.error('❌ [adminBanUser] Ban update failed:', updateError);
+      return { error: 'Failed to ban user: ' + updateError.message };
+    }
+
+    // 4. Record admin action
+    await recordAdminAction({
+      adminId,
+      userId,
+      actionType: 'ban',
+      description: `User banned${reason ? `: ${reason}` : ''}`,
+      metadata: {
+        reason,
+        previous_status: 'active',
+        admin_username: admin.username
+      }
+    });
+
+    // 5. Send notification to user
+    await sendUserStatusNotification({
+      userId,
+      action: 'banned',
+      reason,
+      adminId: admin.username
+    });
+
+    console.log('✅ [adminBanUser] User banned successfully');
     return { success: true };
   } catch (err) {
-    console.error('[adminBanUser] Unexpected error:', err);
+    console.error('💥 [adminBanUser] Unexpected error:', err);
     return { error: 'An unexpected error occurred' };
   }
 }
@@ -1097,68 +1084,62 @@ export async function adminUnbanUser({
   reason?: string;
 }): Promise<{ success?: boolean; error?: string }> {
   try {
-    console.log('[adminUnbanUser] Starting unban process:', { userId, adminId, reason });
+    console.log('🔨 [adminUnbanUser] Starting unban process:', { userId, adminId, reason });
 
-    // 1. Verify admin privileges
-    const { data: admin, error: adminError } = await supabase
-      .from('chainrise_profile')
-      .select('is_admin')
-      .eq('id', adminId)
-      .single();
-
-    if (adminError || !admin || !admin.is_admin) {
-      console.error('[adminUnbanUser] Admin verification failed:', adminError);
-      return { error: 'Unauthorized: Admin privileges required' };
+    // 1. Verify admin privileges and target user
+    const verification = await verifyAdminAndTargetUser(adminId, userId);
+    if (verification.error) {
+      return { error: verification.error };
     }
 
-    // 2. Verify target user exists and is actually banned
-    const { data: user, error: userError } = await supabase
-      .from('chainrise_profile')
-      .select('id, username, email, is_banned')
-      .eq('id', userId)
-      .single();
+    const { admin, user } = verification;
 
-    if (userError || !user) {
-      console.error('[adminUnbanUser] User verification failed:', userError);
-      return { error: 'User not found' };
-    }
-
+    // 2. Check if user is actually banned
     if (!user.is_banned) {
       return { error: 'User is not banned' };
     }
 
-    // 3. Update user ban status
-    const { error: updateError } = await supabase
-      .from('chainrise_profile')
-      .update({
-        is_banned: false,
+    // 3. Update user ban status using RPC
+    const { error: updateError } = await supabase.rpc('admin_update_user_status', {
+      target_user_id: userId,
+      admin_user_id: adminId,
+      status_field: 'is_banned',
+      status_value: false,
+      additional_data: {
         banned_at: null,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', userId);
+        banned_reason: null
+      }
+    });
 
     if (updateError) {
-      console.error('[adminUnbanUser] Unban update failed:', updateError);
-      return { error: 'Failed to unban user' };
+      console.error('❌ [adminUnbanUser] Unban update failed:', updateError);
+      return { error: 'Failed to unban user: ' + updateError.message };
     }
 
-    // 4. Record unban action
-    await supabase
-      .from('chainrise_admin_actions')
-      .insert({
-        admin_id: adminId,
-        user_id: userId,
-        action_type: 'unban',
-        description: `User unbanned: ${reason}`,
-        metadata: {
-          reason: reason
-        }
-      });
+    // 4. Record admin action
+    await recordAdminAction({
+      adminId,
+      userId,
+      actionType: 'unban',
+      description: `User unbanned${reason ? `: ${reason}` : ''}`,
+      metadata: {
+        reason,
+        admin_username: admin.username
+      }
+    });
 
-    console.log('[adminUnbanUser] User unbanned successfully');
+    // 5. Send notification to user
+    await sendUserStatusNotification({
+      userId,
+      action: 'unbanned',
+      reason,
+      adminId: admin.username
+    });
+
+    console.log('✅ [adminUnbanUser] User unbanned successfully');
     return { success: true };
   } catch (err) {
-    console.error('[adminUnbanUser] Unexpected error:', err);
+    console.error('💥 [adminUnbanUser] Unexpected error:', err);
     return { error: 'An unexpected error occurred' };
   }
 }
@@ -1174,72 +1155,66 @@ export async function adminDeactivateUser({
   reason?: string;
 }): Promise<{ success?: boolean; error?: string }> {
   try {
-    console.log('[adminDeactivateUser] Starting deactivation process:', { userId, adminId, reason });
+    console.log('🔨 [adminDeactivateUser] Starting deactivation process:', { userId, adminId, reason });
 
-    // 1. Verify admin privileges
-    const { data: admin, error: adminError } = await supabase
-      .from('chainrise_profile')
-      .select('is_admin')
-      .eq('id', adminId)
-      .single();
-
-    if (adminError || !admin || !admin.is_admin) {
-      console.error('[adminDeactivateUser] Admin verification failed:', adminError);
-      return { error: 'Unauthorized: Admin privileges required' };
+    // 1. Verify admin privileges and target user
+    const verification = await verifyAdminAndTargetUser(adminId, userId);
+    if (verification.error) {
+      return { error: verification.error };
     }
 
-    // 2. Verify target user exists and is active
-    const { data: user, error: userError } = await supabase
-      .from('chainrise_profile')
-      .select('id, username, email, is_active')
-      .eq('id', userId)
-      .single();
+    const { admin, user } = verification;
 
-    if (userError || !user) {
-      console.error('[adminDeactivateUser] User verification failed:', userError);
-      return { error: 'User not found' };
-    }
-
+    // 2. Check if user is already inactive
     if (!user.is_active) {
       return { error: 'User is already deactivated' };
     }
 
-    // 3. Update user active status
-    const { error: updateError } = await supabase
-      .from('chainrise_profile')
-      .update({
-        is_active: false,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', userId);
+    // 3. Update user active status using RPC
+    const { error: updateError } = await supabase.rpc('admin_update_user_status', {
+      target_user_id: userId,
+      admin_user_id: adminId,
+      status_field: 'is_active',
+      status_value: false,
+      additional_data: {
+        deactivation_reason: reason
+      }
+    });
 
     if (updateError) {
-      console.error('[adminDeactivateUser] Deactivation failed:', updateError);
-      return { error: 'Failed to deactivate user' };
+      console.error('❌ [adminDeactivateUser] Deactivation failed:', updateError);
+      return { error: 'Failed to deactivate user: ' + updateError.message };
     }
 
-    // 4. Record deactivation action
-    await supabase
-      .from('chainrise_admin_actions')
-      .insert({
-        admin_id: adminId,
-        user_id: userId,
-        action_type: 'deactivate',
-        description: `User deactivated: ${reason}`,
-        metadata: {
-          reason: reason
-        }
-      });
+    // 4. Record admin action
+    await recordAdminAction({
+      adminId,
+      userId,
+      actionType: 'deactivate',
+      description: `User deactivated${reason ? `: ${reason}` : ''}`,
+      metadata: {
+        reason,
+        previous_status: 'active',
+        admin_username: admin.username
+      }
+    });
 
-    console.log('[adminDeactivateUser] User deactivated successfully');
+    // 5. Send notification to user
+    await sendUserStatusNotification({
+      userId,
+      action: 'deactivated',
+      reason,
+      adminId: admin.username
+    });
+
+    console.log('✅ [adminDeactivateUser] User deactivated successfully');
     return { success: true };
   } catch (err) {
-    console.error('[adminDeactivateUser] Unexpected error:', err);
+    console.error('💥 [adminDeactivateUser] Unexpected error:', err);
     return { error: 'An unexpected error occurred' };
   }
 }
 
-// Admin activate user function
 export async function adminActivateUser({
   userId,
   adminId,
@@ -1250,67 +1225,62 @@ export async function adminActivateUser({
   reason?: string;
 }): Promise<{ success?: boolean; error?: string }> {
   try {
-    console.log('[adminActivateUser] Starting activation process:', { userId, adminId, reason });
+    console.log('🔨 [adminActivateUser] Starting activation process:', { userId, adminId, reason });
 
-    // 1. Verify admin privileges
-    const { data: admin, error: adminError } = await supabase
-      .from('chainrise_profile')
-      .select('is_admin')
-      .eq('id', adminId)
-      .single();
-
-    if (adminError || !admin || !admin.is_admin) {
-      console.error('[adminActivateUser] Admin verification failed:', adminError);
-      return { error: 'Unauthorized: Admin privileges required' };
+    // 1. Verify admin privileges and target user
+    const verification = await verifyAdminAndTargetUser(adminId, userId);
+    if (verification.error) {
+      return { error: verification.error };
     }
 
-    // 2. Verify target user exists and is inactive
-    const { data: user, error: userError } = await supabase
-      .from('chainrise_profile')
-      .select('id, username, email, is_active')
-      .eq('id', userId)
-      .single();
+    const { admin, user } = verification;
 
-    if (userError || !user) {
-      console.error('[adminActivateUser] User verification failed:', userError);
-      return { error: 'User not found' };
-    }
-
+    // 2. Check if user is already active
     if (user.is_active) {
       return { error: 'User is already active' };
     }
 
-    // 3. Update user active status
-    const { error: updateError } = await supabase
-      .from('chainrise_profile')
-      .update({
-        is_active: true,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', userId);
+    // 3. Update user active status using RPC
+    const { error: updateError } = await supabase.rpc('admin_update_user_status', {
+      target_user_id: userId,
+      admin_user_id: adminId,
+      status_field: 'is_active',
+      status_value: true,
+      additional_data: {
+        activation_reason: reason
+      }
+    });
 
     if (updateError) {
-      console.error('[adminActivateUser] Activation failed:', updateError);
-      return { error: 'Failed to activate user' };
+      console.error('❌ [adminActivateUser] Activation failed:', updateError);
+      return { error: 'Failed to activate user: ' + updateError.message };
     }
 
-    // 4. Record activation action
-    await supabase
-      .from('chainrise_admin_actions')
-      .insert({
-        admin_id: adminId,
-        user_id: userId,
-        action_type: 'activate',
-        description: `User activated: ${reason}`,
-        metadata: {
-          reason: reason
-        }
-      });
+    // 4. Record admin action
+    await recordAdminAction({
+      adminId,
+      userId,
+      actionType: 'activate',
+      description: `User activated${reason ? `: ${reason}` : ''}`,
+      metadata: {
+        reason,
+        previous_status: 'inactive',
+        admin_username: admin.username
+      }
+    });
 
-    console.log('[adminActivateUser] User activated successfully');
+    // 5. Send notification to user
+    await sendUserStatusNotification({
+      userId,
+      action: 'activated',
+      reason,
+      adminId: admin.username
+    });
+
+    console.log('✅ [adminActivateUser] User activated successfully');
     return { success: true };
   } catch (err) {
-    console.error('[adminActivateUser] Unexpected error:', err);
+    console.error('💥 [adminActivateUser] Unexpected error:', err);
     return { error: 'An unexpected error occurred' };
   }
 }
@@ -1427,149 +1397,62 @@ export async function adminRestoreUser({
   reason?: string;
 }): Promise<{ success?: boolean; error?: string }> {
   try {
-    console.log('[adminRestoreUser] Starting restore process:', { userId, adminId, reason });
+    console.log('🔨 [adminRestoreUser] Starting restore process:', { userId, adminId, reason });
 
-    // 1. Verify admin privileges
-    const { data: admin, error: adminError } = await supabase
-      .from('chainrise_profile')
-      .select('is_admin')
-      .eq('id', adminId)
-      .single();
-
-    if (adminError || !admin || !admin.is_admin) {
-      console.error('[adminRestoreUser] Admin verification failed:', adminError);
-      return { error: 'Unauthorized: Admin privileges required' };
+    // 1. Verify admin privileges and target user
+    const verification = await verifyAdminAndTargetUser(adminId, userId);
+    if (verification.error) {
+      return { error: verification.error };
     }
 
-    // 2. Verify target user exists and is deleted
-    const { data: user, error: userError } = await supabase
-      .from('chainrise_profile')
-      .select('id, username, email, is_deleted')
-      .eq('id', userId)
-      .single();
+    const { admin, user } = verification;
 
-    if (userError || !user) {
-      console.error('[adminRestoreUser] User verification failed:', userError);
-      return { error: 'User not found' };
-    }
-
+    // 2. Check if user is actually deleted
     if (!user.is_deleted) {
       return { error: 'User is not deleted' };
     }
 
-    // 3. Create Supabase admin client with service role key
-    const supabaseAdmin = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    );
-
-    // 4. Update user in Auth system using service role key
-    const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(
-      userId,
-      { 
-        user_metadata: {
-          soft_deleted: false
-        }
-      }
-    );
-
-    if (authError) {
-      console.warn('[adminRestoreUser] Auth update warning:', authError);
-      // Continue with profile update even if auth update fails
-    }
-
-    // 5. Update user delete status
-    const { error: updateError } = await supabase
-      .from('chainrise_profile')
-      .update({
-        is_deleted: false,
-        deleted_at: null,
-        deleted_by: null,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', userId);
+    // 3. Update user delete status using RPC
+    const { error: updateError } = await supabase.rpc('admin_restore_user', {
+      target_user_id: userId,
+      admin_user_id: adminId,
+      restore_reason: reason
+    });
 
     if (updateError) {
-      console.error('[adminRestoreUser] Restore failed:', updateError);
-      return { error: 'Failed to restore user' };
+      console.error('❌ [adminRestoreUser] Restore failed:', updateError);
+      return { error: 'Failed to restore user: ' + updateError.message };
     }
 
-    // 6. Record restore action
-    await supabase
-      .from('chainrise_admin_actions')
-      .insert({
-        admin_id: adminId,
-        user_id: userId,
-        action_type: 'restore',
-        description: `User restored: ${reason}`,
-        metadata: {
-          reason: reason
-        }
-      });
+    // 4. Record admin action
+    await recordAdminAction({
+      adminId,
+      userId,
+      actionType: 'restore',
+      description: `User restored${reason ? `: ${reason}` : ''}`,
+      metadata: {
+        reason,
+        admin_username: admin.username
+      }
+    });
 
-    console.log('[adminRestoreUser] User restored successfully');
+    // 5. Send notification to user
+    await sendUserStatusNotification({
+      userId,
+      action: 'restored',
+      reason,
+      adminId: admin.username
+    });
+
+    console.log('✅ [adminRestoreUser] User restored successfully');
     return { success: true };
   } catch (err) {
-    console.error('[adminRestoreUser] Unexpected error:', err);
+    console.error('💥 [adminRestoreUser] Unexpected error:', err);
     return { error: 'An unexpected error occurred' };
   }
 }
 
-// Send ban notification to user
-async function sendUserBanNotification(params: {
-  userId: string;
-  reason: string;
-  adminId: string;
-}) {
-  try {
-    const { data: user } = await supabase
-      .from('chainrise_profile')
-      .select('email, name')
-      .eq('id', params.userId)
-      .single();
-
-    if (!user?.email) return;
-
-    const transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        user: process.env.EMAIL_USERNAME!,
-        pass: process.env.EMAIL_PASSWORD!,
-      },
-    });
-
-    const mailOptions = {
-      from: `ChainRise Admin <${process.env.EMAIL_USERNAME}>`,
-      to: user.email,
-      subject: 'Account Suspension Notice',
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2 style="color: #dc3545;">Account Suspended</h2>
-          <p>Dear ${user.name || 'Valued Customer'},</p>
-          <p>We regret to inform you that your ChainRise account has been suspended.</p>
-          ${params.reason ? `<p><strong>Reason:</strong> ${params.reason}</p>` : ''}
-          <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin: 20px 0;">
-            <p><strong>What this means:</strong></p>
-            <ul>
-              <li>You will not be able to log in to your account</li>
-              <li>All active investments will be paused</li>
-              <li>Pending withdrawals will be put on hold</li>
-            </ul>
-          </div>
-          <p>If you believe this is an error, please contact our support team for assistance.</p>
-          <p>Best regards,<br>ChainRise Support Team</p>
-        </div>
-      `,
-    };
-
-    await transporter.sendMail(mailOptions);
-    console.log(`Ban notification sent to ${user.email}`);
-  } catch (error) {
-    console.error('Failed to send ban notification:', error);
-  }
-}
-
-// Add these to your existing adminauth.ts file
+ 
 
 // Get single user profile for editing
 export async function getUserProfile(userId: string): Promise<{ data?: any; error?: string }> {
@@ -1856,4 +1739,169 @@ async function sendEmailUpdateNotification(params: {
   }
 }
 
- 
+ async function verifyAdminAndTargetUser(adminId: string, targetUserId: string): Promise<{
+  admin?: any;
+  user?: any;
+  error?: string;
+}> {
+  try {
+    // Verify admin exists and has admin privileges
+    const { data: admin, error: adminError } = await supabase
+      .from('chainrise_profile')
+      .select('id, username, email, is_admin')
+      .eq('id', adminId)
+      .eq('is_admin', true)
+      .single();
+
+    if (adminError || !admin) {
+      console.error('❌ [verifyAdmin] Admin verification failed:', adminError);
+      return { error: 'Unauthorized: Admin privileges required' };
+    }
+
+    // Verify target user exists
+    const { data: user, error: userError } = await supabase
+      .from('chainrise_profile')
+      .select('id, username, email, is_active, is_banned, is_deleted')
+      .eq('id', targetUserId)
+      .single();
+
+    if (userError || !user) {
+      console.error('❌ [verifyAdmin] Target user verification failed:', userError);
+      return { error: 'Target user not found' };
+    }
+
+    // Prevent self-modification for certain actions
+    if (adminId === targetUserId) {
+      return { error: 'Cannot perform this action on your own account' };
+    }
+
+    return { admin, user };
+  } catch (err) {
+    console.error('💥 [verifyAdminAndTargetUser] Unexpected error:', err);
+    return { error: 'Verification failed' };
+  }
+}
+
+async function recordAdminAction({
+  adminId,
+  userId,
+  actionType,
+  description,
+  metadata
+}: {
+  adminId: string;
+  userId: string;
+  actionType: string;
+  description: string;
+  metadata?: any;
+}): Promise<void> {
+  try {
+    await supabase
+      .from('chainrise_admin_actions')
+      .insert({
+        admin_id: adminId,
+        user_id: userId,
+        action_type: actionType,
+        description: description,
+        metadata: metadata || {}
+      });
+  } catch (err) {
+    console.error('❌ [recordAdminAction] Failed to record action:', err);
+    // Don't throw error - admin action should continue even if logging fails
+  }
+}
+
+async function sendUserStatusNotification({
+  userId,
+  action,
+  reason,
+  adminId
+}: {
+  userId: string;
+  action: string;
+  reason: string;
+  adminId: string;
+}): Promise<void> {
+  try {
+    const { data: user } = await supabase
+      .from('chainrise_profile')
+      .select('email, name, username')
+      .eq('id', userId)
+      .single();
+
+    if (!user?.email) {
+      console.warn('⚠️ [sendUserStatusNotification] No email found for user:', userId);
+      return;
+    }
+
+    const actionTitles = {
+      banned: 'Account Suspended',
+      unbanned: 'Account Reactivated',
+      deactivated: 'Account Deactivated',
+      activated: 'Account Activated',
+      restored: 'Account Restored'
+    };
+
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: process.env.EMAIL_USERNAME!,
+        pass: process.env.EMAIL_PASSWORD!,
+      },
+    });
+
+    const mailOptions = {
+      from: `ChainRise Admin <${process.env.EMAIL_USERNAME}>`,
+      to: user.email,
+      subject: actionTitles[action as keyof typeof actionTitles] || 'Account Status Update',
+      html: generateStatusEmailTemplate(user.name || user.username, action, reason, adminId),
+    };
+
+    await transporter.sendMail(mailOptions);
+    console.log(`✅ Status notification sent to ${user.email}`);
+  } catch (error) {
+    console.error('❌ Failed to send status notification:', error);
+  }
+}
+
+function generateStatusEmailTemplate(
+  userName: string,
+  action: string,
+  reason: string,
+  adminId: string
+): string {
+  const templates = {
+    banned: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #dc3545;">Account Suspended</h2>
+        <p>Dear ${userName},</p>
+        <p>We regret to inform you that your ChainRise account has been suspended.</p>
+        ${reason ? `<p><strong>Reason:</strong> ${reason}</p>` : ''}
+        <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin: 20px 0;">
+          <p><strong>Action taken by:</strong> ${adminId}</p>
+          <p><strong>Date:</strong> ${new Date().toLocaleDateString()}</p>
+        </div>
+        <p>If you believe this is an error, please contact our support team.</p>
+      </div>
+    `,
+    unbanned: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #28a745;">Account Reactivated</h2>
+        <p>Dear ${userName},</p>
+        <p>We're pleased to inform you that your ChainRise account has been reactivated.</p>
+        ${reason ? `<p><strong>Reason:</strong> ${reason}</p>` : ''}
+        <p>You can now log in and access all features of your account.</p>
+      </div>
+    `,
+    // Add other templates for deactivated, activated, restored
+  };
+
+  return templates[action as keyof typeof templates] || `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #2a52be;">Account Status Updated</h2>
+      <p>Dear ${userName},</p>
+      <p>Your account status has been updated to: ${action}</p>
+      ${reason ? `<p><strong>Reason:</strong> ${reason}</p>` : ''}
+    </div>
+    `;
+  }

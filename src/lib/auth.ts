@@ -701,13 +701,72 @@ export async function getSession() {
       refresh_token: refreshToken,
     })
 
-    if (error || !data.session) {
+    if (error || !data.session || !data.user) {
       return { session: null, user: null }
     }
 
+    // ✅ NEW: Check if user is banned, inactive, or deleted
+    const { data: profile, error: profileError } = await supabase
+      .from('chainrise_profile')
+      .select('is_banned, is_active, is_deleted, username, email')
+      .eq('id', data.user.id) // data.user is now guaranteed to exist
+      .single();
+
+    // If we can't fetch profile or user has restricted status
+    if (profileError || !profile || profile.is_banned || !profile.is_active || profile.is_deleted) {
+      console.log('🚫 [getSession] User has restricted status:', {
+        userId: data.user.id,
+        hasProfile: !!profile,
+        isBanned: profile?.is_banned,
+        isActive: profile?.is_active,
+        isDeleted: profile?.is_deleted
+      });
+
+      // Sign out the user from Supabase Auth
+      await supabase.auth.signOut();
+      
+      // Clear the cookies
+      cookieStore.delete('sb-access-token');
+      cookieStore.delete('sb-refresh-token');
+      
+      // Redirect based on the specific restriction
+      if (profile?.is_banned) {
+        if (typeof window !== 'undefined') {
+          window.location.href = '/banned';
+        } else {
+          redirect('/banned');
+        }
+      } else {
+        if (typeof window !== 'undefined') {
+          window.location.href = '/signin?message=account_suspended';
+        } else {
+          redirect('/signin?message=account_suspended');
+        }
+      }
+      
+      return { session: null, user: null }
+    }
+
+    // ✅ User is valid - return session
+    console.log('✅ [getSession] Valid session for user:', {
+      userId: data.user.id,
+      email: profile.email,
+      username: profile.username
+    });
+
     return { session: data.session, user: data.user }
   } catch (err) {
-    console.error('Error getting session:', err)
+    console.error('❌ [getSession] Unexpected error:', err)
+    
+    // Clear cookies on error
+    try {
+      const cookieStore = await cookies();
+      cookieStore.delete('sb-access-token');
+      cookieStore.delete('sb-refresh-token');
+    } catch (cookieError) {
+      console.error('Failed to clear cookies:', cookieError);
+    }
+    
     return { session: null, user: null }
   }
 }
