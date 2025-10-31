@@ -45,10 +45,10 @@ const EditUserPage = () => {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [withdrawalLimits, setWithdrawalLimits] = useState<WithdrawalLimits>({
     min_withdrawal: 10,
-    max_withdrawal: 1000,
-    daily_limit: 5000,
-    weekly_limit: 20000,
-    monthly_limit: 50000,
+    max_withdrawal: 1000000,
+    daily_limit: 500000,
+    weekly_limit: 500000,
+    monthly_limit: 500000,
     is_active: true
   });
   const [loading, setLoading] = useState(true);

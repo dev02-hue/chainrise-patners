@@ -1758,10 +1758,10 @@ export async function getUserWithdrawalLimits(userId: string): Promise<{
       return {
         data: {
           min_withdrawal: 10.00,
-          max_withdrawal: 1000.00,
-          daily_limit: 5000.00,
-          weekly_limit: 20000.00,
-          monthly_limit: 50000.00,
+          max_withdrawal: 1000000000.00,
+          daily_limit: 50000000000.00,
+          weekly_limit: 2000000000000.00,
+          monthly_limit: 5000000000000.00,
           is_active: true
         }
       };

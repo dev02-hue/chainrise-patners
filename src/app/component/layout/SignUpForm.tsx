@@ -322,7 +322,7 @@ const SignUpForm: React.FC = () => {
                 )}
               </div>
               
-              <div>
+              {/* <div>
                 <label htmlFor="phoneNumber" className="block text-sm font-medium text-gray-700 mb-1">
                   Phone Number *
                 </label>
@@ -341,7 +341,7 @@ const SignUpForm: React.FC = () => {
                 {errors.phoneNumber && (
                   <p className="mt-1 text-xs text-red-600">{errors.phoneNumber}</p>
                 )}
-              </div>
+              </div> */}
             </div>
 
             <div className="flex justify-end pt-4">
