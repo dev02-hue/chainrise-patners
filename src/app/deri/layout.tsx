@@ -2,7 +2,7 @@
 "use client"
 import Link from "next/link";
 import { ReactNode, useState } from "react";
-import { AiFillTrademarkCircle } from "react-icons/ai";
+import { AiFillTrademarkCircle, AiFillWallet } from "react-icons/ai";
 import { BsDatabaseCheck } from "react-icons/bs";
 import { FiUsers, FiUpload, FiDownload, FiMenu, FiX, FiHome, FiTrendingUp, FiMail } from "react-icons/fi";
 import { MdAnalytics } from "react-icons/md";
@@ -28,6 +28,11 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     href: "/deri/all-deposit",
     label: "All Deposits",
     icon: BsDatabaseCheck, // ✅ represents a verified or completed deposit
+  },
+  {
+    href: "/deri/WalletManagement",
+    label: "Deposit Wallets",
+    icon: AiFillWallet, // ✅ represents a verified or completed deposit
   },
   {
     href: "/deri/deposit-analytics",

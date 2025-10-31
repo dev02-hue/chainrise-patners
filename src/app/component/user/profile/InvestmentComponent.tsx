@@ -13,7 +13,9 @@ import {
   FaCheck,
   FaShieldAlt,
   FaRocket,
-  FaDollarSign
+  FaDollarSign,
+  FaExclamationTriangle,
+  FaSpinner
 } from 'react-icons/fa';
 import { 
   SiBinance, 
@@ -22,6 +24,7 @@ import {
   SiRipple,
   SiLitecoin
 } from 'react-icons/si';
+import { getActiveWalletAddresses, WalletAddress } from '@/lib/walletAddresses';
 
 // Types
 interface CryptoAsset {
@@ -51,7 +54,7 @@ interface DepositForm {
 // Constants
 const MINIMUM_DEPOSIT = 100;
 
-// Custom hooks
+// Custom hooks - UPDATED TO USE REAL DATA
 const useCryptoAssets = () => {
   const [assets, setAssets] = useState<CryptoAsset[]>([]);
   const [loading, setLoading] = useState(true);
@@ -60,53 +63,34 @@ const useCryptoAssets = () => {
   useEffect(() => {
     const fetchAssets = async () => {
       try {
-        // Simulated API call - replace with your actual implementation
-        const mockAssets: CryptoAsset[] = [
-          {
-            id: '1',
-            symbol: 'BTC',
-            name: 'Bitcoin',
-            walletAddress: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
-            network: 'Bitcoin',
-            minDeposit: 0.001
-          },
-          {
-            id: '2',
-            symbol: 'ETH',
-            name: 'Ethereum',
-            walletAddress: '0x742d35Cc6634C0532925a3b8Dc9F5a4f5a9e79c1',
-            network: 'Ethereum ERC20',
-            minDeposit: 0.01
-          },
-          {
-            id: '3',
-            symbol: 'USDT',
-            name: 'Tether',
-            walletAddress: '0x742d35Cc6634C0532925a3b8Dc9F5a4f5a9e79c1',
-            network: 'Ethereum ERC20',
-            minDeposit: 10
-          },
-          {
-            id: '4',
-            symbol: 'BNB',
-            name: 'Binance Coin',
-            walletAddress: 'bnb1xy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
-            network: 'BNB Chain',
-            minDeposit: 0.1
-          },
-          {
-            id: '5',
-            symbol: 'SOL',
-            name: 'Solana',
-            walletAddress: '7x2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlhxy2kgd',
-            network: 'Solana',
-            minDeposit: 0.1
-          }
-        ];
-        setAssets(mockAssets);
+        setLoading(true);
+        setError('');
+        
+        // Fetch real wallet addresses from server
+        const { data: walletData, error: fetchError } = await getActiveWalletAddresses();
+        
+        if (fetchError) {
+          setError(fetchError);
+          return;
+        }
+
+        if (walletData && walletData.length > 0) {
+          // Transform server data to match component interface
+          const transformedAssets: CryptoAsset[] = walletData.map((wallet: WalletAddress) => ({
+            id: wallet.id,
+            symbol: wallet.symbol,
+            name: wallet.name,
+            walletAddress: wallet.wallet_address,
+            network: wallet.network,
+            minDeposit: wallet.min_deposit
+          }));
+          setAssets(transformedAssets);
+        } else {
+          setError('No active wallet addresses found');
+        }
       } catch (err) {
-        console.error(err);
-        setError('Failed to load crypto assets');
+        console.error('Failed to fetch crypto assets:', err);
+        setError('Failed to load wallet addresses');
       } finally {
         setLoading(false);
       }
@@ -336,7 +320,7 @@ const DepositWizard = () => {
   const [copiedAddress, setCopiedAddress] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const { assets, loading: assetsLoading } = useCryptoAssets();
+  const { assets, loading: assetsLoading, error: assetsError } = useCryptoAssets();
 
   const selectedAsset = assets.find(asset => asset.symbol === formData.cryptoType);
   const isAmountValid = formData.amount >= MINIMUM_DEPOSIT;
@@ -541,8 +525,31 @@ const DepositWizard = () => {
       <div>
         <h3 className="text-lg font-semibold text-gray-800 mb-4">Choose Crypto</h3>
         {assetsLoading ? (
-          <div className="flex justify-center py-8">
-            <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
+          <div className="flex flex-col items-center justify-center py-12 space-y-4">
+            <FaSpinner className="w-8 h-8 text-blue-500 animate-spin" />
+            <p className="text-gray-600 text-sm">Loading wallet addresses...</p>
+          </div>
+        ) : assetsError ? (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="bg-rose-50 border border-rose-200 rounded-2xl p-6 text-center"
+          >
+            <FaExclamationTriangle className="text-rose-500 text-2xl mx-auto mb-3" />
+            <h4 className="text-rose-800 font-semibold mb-2">Unable to Load Wallets</h4>
+            <p className="text-rose-700 text-sm">{assetsError}</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="mt-4 bg-rose-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-rose-700 transition-colors"
+            >
+              Try Again
+            </button>
+          </motion.div>
+        ) : assets.length === 0 ? (
+          <div className="text-center py-12">
+            <div className="text-6xl mb-4">💸</div>
+            <h3 className="text-xl font-semibold text-gray-600 mb-2">No Wallets Available</h3>
+            <p className="text-gray-500">Please contact support for assistance</p>
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-3">
