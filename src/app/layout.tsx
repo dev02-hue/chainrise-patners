@@ -4,7 +4,7 @@ import "./globals.css";
  
 import LayoutWrapper from "./component/layout/LayoutWrapper";
  
-import TawkToScript from "./component/layout/TawkToScript";
+import SmartsuppScript from "./component/layout/TawkToScript";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -71,7 +71,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-      <TawkToScript  />
+      <SmartsuppScript  />
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
