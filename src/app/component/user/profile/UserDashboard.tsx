@@ -15,23 +15,24 @@ import {
   FiActivity
 } from 'react-icons/fi';
 import {
-  getTotalDeposit,
-  getTotalCompletedWithdrawal,
  
+  getTotalCompletedWithdrawal,
 } from '@/lib/balance';
 import { getProfileData, getUserDashboardStats } from '@/lib/getProfileData';
 import { getSession } from '@/lib/auth';
+ 
 import TransactionsTableNoBalance from '../layout/TransactionsTableNoBalance';
+import { getUserAdminDepositTotals } from '@/lib/adminauth';
 
 const UserDashboard: React.FC = () => {
   const [userStats, setUserStats] = useState({
     balance: 0,
-    totalDeposit: 0,
+    totalDeposit: 0, // This will now come from getUserAdminDepositTotals (totalFeeDeposits)
     currentInvestment: 0,
     totalBonus: 0,
     totalWithdrawal: 0,
     pendingWithdrawal: 0,
-    totalEarnings: 0,
+    totalEarnings: 0, // This will now come from getUserAdminDepositTotals (totalEarningsDeposits)
     activeInvestments: 0,
     pendingDeposits: 0
   });
@@ -63,17 +64,17 @@ const UserDashboard: React.FC = () => {
           throw new Error('User ID not found in session');
         }
 
-        // Fetch only the data we need from specific sources
+        // Fetch data from all sources including the new admin deposit totals
         const [
           profileData,
-          totalDeposit,
           totalCompletedWithdrawal,
-          dashboardStats
+          dashboardStats,
+          adminDepositTotals // NEW: Get totals from admin deposit tables
         ] = await Promise.all([
-          getProfileData(), // For balance, total_earnings, total_invested
-          getTotalDeposit(), // For total deposits
+          getProfileData(), // For balance, total_invested, etc.
           getTotalCompletedWithdrawal(), // For total withdrawals
-          getUserDashboardStats() // For pending withdrawals only
+          getUserDashboardStats(), // For pending withdrawals and active investments
+          getUserAdminDepositTotals(userId) // NEW: Get admin deposit totals
         ]);
 
         if (profileData.error || !profileData.data) {
@@ -82,10 +83,13 @@ const UserDashboard: React.FC = () => {
 
         const profile = profileData.data;
         
-        // Get financial fields ONLY from getProfileData
+        // Get financial fields from getProfileData
         const balance = profile.balance || 0;
-        const totalEarnings = profile.totalEarnings || 0;
         const totalInvested = profile.totalInvested || 0;
+
+        // NEW: Get deposit and earnings totals from admin deposit tables
+        const totalDeposit = adminDepositTotals.data?.totalFeeDeposits || 0;
+        const totalEarnings = adminDepositTotals.data?.totalEarningsDeposits || 0;
 
         const referralCode = profile.referralCode || generateReferralCode();
         const referralLink = `${window.location.origin}/signup?ref_id=${referralCode}`;
@@ -96,26 +100,34 @@ const UserDashboard: React.FC = () => {
           referralCode: referralCode,
         });
 
-        // Get pending withdrawals from dashboardStats
+        // Get pending withdrawals and other stats from dashboardStats
         const pendingWithdrawal = dashboardStats?.data?.pendingWithdrawals || 0;
         const activeInvestments = dashboardStats?.data?.activeInvestments || 0;
         const pendingDeposits = dashboardStats?.data?.pendingDeposits || 0;
 
         const finalUserStats = {
           balance: balance, // From getProfileData
-          totalDeposit: totalDeposit, // From getTotalDeposit
+          totalDeposit: totalDeposit, // NEW: From getUserAdminDepositTotals (totalFeeDeposits)
           currentInvestment: totalInvested, // From getProfileData
-          totalBonus: totalEarnings, // From getProfileData
+          totalBonus: totalEarnings, // From getUserAdminDepositTotals (totalEarningsDeposits)
           totalWithdrawal: totalCompletedWithdrawal, // From getTotalCompletedWithdrawal
           pendingWithdrawal: pendingWithdrawal, // From getUserDashboardStats
-          totalEarnings: totalEarnings, // From getProfileData
+          totalEarnings: totalEarnings, // NEW: From getUserAdminDepositTotals (totalEarningsDeposits)
           activeInvestments: activeInvestments, // From getUserDashboardStats
           pendingDeposits: pendingDeposits, // From getUserDashboardStats
         };
 
         setUserStats(finalUserStats);
 
+        console.log('Dashboard data loaded:', {
+          balance,
+          totalDeposit,
+          totalEarnings,
+          adminDepositTotals: adminDepositTotals.data
+        });
+
       } catch (err) {
+        console.error('Error fetching dashboard data:', err);
         setError(err instanceof Error ? err.message : 'An unexpected error occurred');
       } finally {
         setLoading(false);
@@ -149,7 +161,7 @@ const UserDashboard: React.FC = () => {
       icon: <FiTrendingUp className="text-emerald-500" />,
       color: 'bg-gradient-to-br from-emerald-50 to-emerald-100 border border-emerald-200',
       trend: 'up',
-      description: 'All-time deposits'
+      description: 'All-time deposits from admin'
     },
     { 
       title: 'Active Investments', 
@@ -165,7 +177,7 @@ const UserDashboard: React.FC = () => {
       icon: <FiGift className="text-amber-500" />,
       color: 'bg-gradient-to-br from-amber-50 to-amber-100 border border-amber-200',
       trend: 'up',
-      description: 'Profit from investments'
+      description: 'Earnings from admin deposits'
     },
     { 
       title: 'Total Withdrawal', 

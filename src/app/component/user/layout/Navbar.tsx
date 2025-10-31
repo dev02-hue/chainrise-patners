@@ -16,7 +16,7 @@ import {
   FiSettings,
   FiShare2,
  
-  FiPieChart
+  // FiPieChart
 } from "react-icons/fi";
 import { useRouter, usePathname } from 'next/navigation';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
@@ -81,7 +81,7 @@ const navItems = [
     name: "Deposit",
     icon: <FiDollarSign className="text-lg" />,
     dropdown: [
-      { name: "All Deposit", href: "/user/deposit-all", icon: <FiPieChart size={16} /> },
+      // { name: "All Deposit", href: "/user/deposit-all", icon: <FiPieChart size={16} /> },
       { name: "New Deposit", href: "/user/deposit-new", icon: <FiDollarSign size={16} /> },
     ],
   },

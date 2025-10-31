@@ -419,18 +419,17 @@ export async function adminFundUser({
   amount,
   cryptoType,
   transactionType = 'bonus',
-  description, // Now optional
+  description,
   sendEmailNotification = true,
   adminId,
-  // New fields for investment plans
-  investmentPlan, // 'not_a_deposit' | 'plan_1' | 'plan_2' | 'plan_3' | 'plan_4'
-  // planDetails // Optional: Store plan-specific details
+  investmentPlan,
+  // planDetails
 }: {
   userId: string;
   amount: number;
   cryptoType: string;
   transactionType?: 'bonus' | 'add_funds_with_fee' | 'earnings';
-  description?: string; // Made optional
+  description?: string;
   sendEmailNotification?: boolean;
   adminId: string;
   investmentPlan?: 'not_a_deposit' | 'plan_1' | 'plan_2' | 'plan_3' | 'plan_4';
@@ -465,77 +464,72 @@ export async function adminFundUser({
     // 1. Use the database function to update balance and financial fields
     console.log('[adminFundUser] Calling database function...');
     
-    const { data: dbResult, error: rpcError } = await supabase.rpc('admin_update_user_financials', {
-      target_user_id: userId,
-      admin_user_id: adminId,
-      amount_to_add: amount,
-      transaction_type: transactionType,
-      description_text: description || null, // Handle optional description
-      investment_plan: investmentPlan
-    });
+    // For earnings transactions, we need to update both total_earnings AND balance
+    const financialUpdateResult = await handleFinancialUpdates(
+      userId, 
+      adminId, 
+      amount, 
+      transactionType,
+      description,
+      investmentPlan
+    );
 
-    console.log('[adminFundUser] Database function result:', { dbResult, rpcError });
-
-    if (rpcError) {
-      console.error('[adminFundUser] Database function failed:', rpcError);
-      return { error: 'Database update failed: ' + rpcError.message };
+    if (financialUpdateResult.error) {
+      return { error: financialUpdateResult.error };
     }
 
-    if (dbResult?.error) {
-      console.error('[adminFundUser] Database function returned error:', dbResult.error);
-      return { error: dbResult.error };
-    }
+    console.log('[adminFundUser] Financial fields updated successfully:', financialUpdateResult.data);
 
-    if (!dbResult?.success) {
-      console.error('[adminFundUser] Database function did not return success');
-      return { error: 'Financial update failed unexpectedly' };
-    }
-
-    console.log('[adminFundUser] Financial fields updated successfully:', dbResult);
-
-    // 2. Create deposit record with new fields
+    // 2. Create appropriate deposit records based on transaction type
     const reference = `ADM-${transactionType.toUpperCase()}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
     
-    console.log('[adminFundUser] Creating deposit record...');
+    let depositRecord;
     
-    // Create admin notes with optional description
-    const adminNotes = description 
-      ? `Admin ${transactionType}: ${description} | By: ${adminId}`
-      : `Admin ${transactionType} | By: ${adminId}`;
-    
-    const { data: deposit, error: depositError } = await supabase
-      .from('chainrise_deposits')
-      .insert([{
-        user_id: userId,
+    if (transactionType === 'add_funds_with_fee') {
+      // Create record in admin_fee_deposits table
+      depositRecord = await createAdminFeeDeposit({
+        userId,
+        adminId,
         amount,
-        crypto_type: cryptoType,
-        wallet_address: 'ADMIN_FUNDING',
+        cryptoType,
+        investmentPlan,
+        description,
+        reference
+      });
+    } else if (transactionType === 'earnings') {
+      // Create record in admin_earnings_deposits table
+      depositRecord = await createAdminEarningsDeposit({
+        userId,
+        adminId,
+        amount,
+        cryptoType,
+        description,
+        reference
+      });
+    } else {
+      // Create regular deposit record for bonus transactions
+      depositRecord = await createRegularDeposit({
+        userId,
+        adminId,
+        amount,
+        cryptoType,
+        transactionType,
+        description,
         reference,
-        status: 'completed',
-        processed_at: new Date().toISOString(),
-        admin_notes: adminNotes, // Uses the conditional admin notes
-        is_admin_funded: true,
-        admin_id: adminId,
-        transaction_type: transactionType,
-        // investment_plan: investmentPlan,
-        // plan_details: planDetails,
-        // Store which financial field was updated
-        financial_field_updated: getFinancialFieldForTransaction(transactionType)
-      }])
-      .select()
-      .single();
-
-    if (depositError || !deposit) {
-      console.error('[adminFundUser] Deposit creation failed:', depositError);
-      return { error: 'Failed to create funding record: ' + depositError?.message };
+        investmentPlan
+      });
     }
 
-    console.log('[adminFundUser] Deposit record created:', deposit.id);
+    if (depositRecord.error || !depositRecord.data) {
+      console.error('[adminFundUser] Deposit creation failed:', depositRecord.error);
+      return { error: 'Failed to create funding record: ' + depositRecord.error };
+    }
+
+    console.log('[adminFundUser] Deposit record created:', depositRecord.data.id);
 
     // 3. Record transaction
     console.log('[adminFundUser] Recording transaction...');
     
-    // Create transaction description with optional description
     const transactionDescription = description 
       ? `Admin ${transactionType}: ${description}`
       : `Admin ${transactionType}`;
@@ -547,22 +541,22 @@ export async function adminFundUser({
         type: 'admin_funding',
         amount: amount,
         currency: 'USD',
-        description: transactionDescription, // Uses the conditional description
+        description: transactionDescription,
         reference: reference,
         status: 'completed',
         metadata: {
-          deposit_id: deposit.id,
+          deposit_id: depositRecord.data.id,
           admin_id: adminId,
           transaction_type: transactionType,
           investment_plan: investmentPlan,
-          description: description || null, // Handle optional description
-          previous_balance: dbResult.previous_balance,
-          new_balance: dbResult.new_balance,
+          description: description || null,
+          previous_balance: financialUpdateResult.data.previous_balance,
+          new_balance: financialUpdateResult.data.new_balance,
           financial_field_updated: getFinancialFieldForTransaction(transactionType),
-          previous_total_invested: dbResult.previous_total_invested,
-          new_total_invested: dbResult.new_total_invested,
-          previous_total_earnings: dbResult.previous_total_earnings,
-          new_total_earnings: dbResult.new_total_earnings
+          previous_total_invested: financialUpdateResult.data.previous_total_invested,
+          new_total_invested: financialUpdateResult.data.new_total_invested,
+          previous_total_earnings: financialUpdateResult.data.previous_total_earnings,
+          new_total_earnings: financialUpdateResult.data.new_total_earnings
         }
       });
 
@@ -570,31 +564,239 @@ export async function adminFundUser({
       console.error('[adminFundUser] Transaction record failed:', transactionError);
     }
 
-    // 4. Send notification (only if description exists or use default message)
+    // 4. Send notification
     if (sendEmailNotification) {
       console.log('[adminFundUser] Sending notification...');
       await sendAdminFundingNotificationToUser({
         userId,
         amount,
         transactionType,
-        description: description || `Admin ${transactionType} of $${amount}`, // Provide default if no description
+        description: description || `Admin ${transactionType} of $${amount}`,
         reference,
         adminId,
-        // investmentPlan
       });
     }
 
     console.log('[adminFundUser] Admin funding completed successfully');
     return { 
       success: true, 
-      depositId: deposit.id,
-      newBalance: dbResult.new_balance
+      depositId: depositRecord.data.id,
+      newBalance: financialUpdateResult.data.new_balance
     };
   } catch (err) {
     console.error('[adminFundUser] Unexpected error:', err);
     return { error: 'An unexpected error occurred: ' + (err instanceof Error ? err.message : 'Unknown error') };
   }
 }
+
+// New helper functions:
+
+/**
+ * Handle financial updates based on transaction type
+ * For earnings: update both total_earnings AND balance
+ */
+async function handleFinancialUpdates(
+  userId: string,
+  adminId: string,
+  amount: number,
+  transactionType: string,
+  description?: string,
+  investmentPlan?: string
+): Promise<{ data?: any; error?: string }> {
+  
+  if (transactionType === 'earnings') {
+    // For earnings, we need to update both total_earnings and balance
+    return await updateEarningsAndBalance(userId, adminId, amount, description);
+  } else {
+    // For other transaction types, use the existing RPC function
+    const { data: dbResult, error: rpcError } = await supabase.rpc('admin_update_user_financials', {
+      target_user_id: userId,
+      admin_user_id: adminId,
+      amount_to_add: amount,
+      transaction_type: transactionType,
+      description_text: description || null,
+      investment_plan: investmentPlan
+    });
+
+    if (rpcError) {
+      console.error('[handleFinancialUpdates] Database function failed:', rpcError);
+      return { error: 'Database update failed: ' + rpcError.message };
+    }
+
+    if (dbResult?.error) {
+      console.error('[handleFinancialUpdates] Database function returned error:', dbResult.error);
+      return { error: dbResult.error };
+    }
+
+    if (!dbResult?.success) {
+      console.error('[handleFinancialUpdates] Database function did not return success');
+      return { error: 'Financial update failed unexpectedly' };
+    }
+
+    return { data: dbResult };
+  }
+}
+
+/**
+ * Update both total_earnings and balance for earnings transactions
+ */
+async function updateEarningsAndBalance(
+  userId: string,
+  adminId: string,
+  amount: number,
+  description?: string
+): Promise<{ data?: any; error?: string }> {
+  try {
+    const { data: dbResult, error: rpcError } = await supabase.rpc('admin_update_earnings_and_balance', {
+      target_user_id: userId,
+      admin_user_id: adminId,
+      earnings_amount: amount,
+      description_text: description || null
+    });
+
+    if (rpcError) {
+      console.error('[updateEarningsAndBalance] Database function failed:', rpcError);
+      return { error: 'Database update failed: ' + rpcError.message };
+    }
+
+    if (dbResult?.error) {
+      console.error('[updateEarningsAndBalance] Database function returned error:', dbResult.error);
+      return { error: dbResult.error };
+    }
+
+    if (!dbResult?.success) {
+      console.error('[updateEarningsAndBalance] Database function did not return success');
+      return { error: 'Earnings and balance update failed unexpectedly' };
+    }
+
+    return { data: dbResult };
+  } catch (err) {
+    console.error('[updateEarningsAndBalance] Unexpected error:', err);
+    return { error: 'An unexpected error occurred' };
+  }
+}
+
+/**
+ * Create record in admin_fee_deposits table
+ */
+async function createAdminFeeDeposit(params: {
+  userId: string;
+  adminId: string;
+  amount: number;
+  cryptoType: string;
+  investmentPlan?: string;
+  description?: string;
+  reference: string;
+}): Promise<{ data?: any; error?: string }> {
+  // const adminNotes = params.description 
+  //   ? `Admin add_funds_with_fee: ${params.description} | By: ${params.adminId}`
+  //   : `Admin add_funds_with_fee | By: ${params.adminId}`;
+
+  const { data: deposit, error: depositError } = await supabase
+    .from('admin_fee_deposits')
+    .insert([{
+      user_id: params.userId,
+      admin_id: params.adminId,
+      amount: params.amount,
+      crypto_type: params.cryptoType,
+      investment_plan: params.investmentPlan,
+      fee_amount: 0, // You can calculate fees here if needed
+      net_amount: params.amount,
+      description: params.description,
+      reference: params.reference,
+      status: 'completed'
+    }])
+    .select()
+    .single();
+
+  if (depositError) {
+    return { error: depositError.message };
+  }
+
+  return { data: deposit };
+}
+
+/**
+ * Create record in admin_earnings_deposits table
+ */
+async function createAdminEarningsDeposit(params: {
+  userId: string;
+  adminId: string;
+  amount: number;
+  cryptoType: string;
+  description?: string;
+  reference: string;
+}): Promise<{ data?: any; error?: string }> {
+  // const adminNotes = params.description 
+  //   ? `Admin earnings: ${params.description} | By: ${params.adminId}`
+  //   : `Admin earnings | By: ${params.adminId}`;
+
+  const { data: deposit, error: depositError } = await supabase
+    .from('admin_earnings_deposits')
+    .insert([{
+      user_id: params.userId,
+      admin_id: params.adminId,
+      amount: params.amount,
+      crypto_type: params.cryptoType,
+      description: params.description,
+      reference: params.reference,
+      status: 'completed'
+    }])
+    .select()
+    .single();
+
+  if (depositError) {
+    return { error: depositError.message };
+  }
+
+  return { data: deposit };
+}
+
+/**
+ * Create regular deposit record (for bonus transactions)
+ */
+async function createRegularDeposit(params: {
+  userId: string;
+  adminId: string;
+  amount: number;
+  cryptoType: string;
+  transactionType: string;
+  description?: string;
+  reference: string;
+  investmentPlan?: string;
+}): Promise<{ data?: any; error?: string }> {
+  const adminNotes = params.description 
+    ? `Admin ${params.transactionType}: ${params.description} | By: ${params.adminId}`
+    : `Admin ${params.transactionType} | By: ${params.adminId}`;
+
+  const { data: deposit, error: depositError } = await supabase
+    .from('chainrise_deposits')
+    .insert([{
+      user_id: params.userId,
+      amount: params.amount,
+      crypto_type: params.cryptoType,
+      wallet_address: 'ADMIN_FUNDING',
+      reference: params.reference,
+      status: 'completed',
+      processed_at: new Date().toISOString(),
+      admin_notes: adminNotes,
+      is_admin_funded: true,
+      admin_id: params.adminId,
+      transaction_type: params.transactionType,
+      financial_field_updated: getFinancialFieldForTransaction(params.transactionType)
+    }])
+    .select()
+    .single();
+
+  if (depositError) {
+    return { error: depositError.message };
+  }
+
+  return { data: deposit };
+}
+
+// Keep the existing helper functions (getFinancialFieldForTransaction, validateInvestmentPlanAmount)
+// They remain the same
 
 // Helper function to determine which financial field to update
 function getFinancialFieldForTransaction(transactionType: string): string {
@@ -1905,3 +2107,76 @@ function generateStatusEmailTemplate(
     </div>
     `;
   }
+
+
+  export async function getUserAdminDepositTotals(
+  userId: string
+): Promise<{ 
+  data?: {
+    totalFeeDeposits: number;
+    totalEarningsDeposits: number;
+    totalAllAdminDeposits: number;
+  }; 
+  error?: string 
+}> {
+  try {
+    console.log('[getUserAdminDepositTotals] Calculating totals for user:', userId);
+
+    // Validate user exists
+    const { data: user, error: userError } = await supabase
+      .from('chainrise_profile')
+      .select('id')
+      .eq('id', userId)
+      .single();
+
+    if (userError || !user) {
+      return { error: 'User not found' };
+    }
+
+    // Calculate total from admin_fee_deposits
+    const { data: feeDeposits, error: feeError } = await supabase
+      .from('admin_fee_deposits')
+      .select('amount')
+      .eq('user_id', userId)
+      .eq('status', 'completed');
+
+    if (feeError) {
+      console.error('[getUserAdminDepositTotals] Error fetching fee deposits:', feeError);
+      return { error: 'Failed to fetch fee deposits' };
+    }
+
+    // Calculate total from admin_earnings_deposits
+    const { data: earningsDeposits, error: earningsError } = await supabase
+      .from('admin_earnings_deposits')
+      .select('amount')
+      .eq('user_id', userId)
+      .eq('status', 'completed');
+
+    if (earningsError) {
+      console.error('[getUserAdminDepositTotals] Error fetching earnings deposits:', earningsError);
+      return { error: 'Failed to fetch earnings deposits' };
+    }
+
+    // Calculate totals
+    const totalFeeDeposits = feeDeposits?.reduce((sum, deposit) => sum + (deposit.amount || 0), 0) || 0;
+    const totalEarningsDeposits = earningsDeposits?.reduce((sum, deposit) => sum + (deposit.amount || 0), 0) || 0;
+    const totalAllAdminDeposits = totalFeeDeposits + totalEarningsDeposits;
+
+    console.log('[getUserAdminDepositTotals] Calculated totals:', {
+      totalFeeDeposits,
+      totalEarningsDeposits,
+      totalAllAdminDeposits
+    });
+
+    return {
+      data: {
+        totalFeeDeposits,
+        totalEarningsDeposits,
+        totalAllAdminDeposits
+      }
+    };
+  } catch (err) {
+    console.error('[getUserAdminDepositTotals] Unexpected error:', err);
+    return { error: 'An unexpected error occurred' };
+  }
+}

@@ -318,7 +318,7 @@ const DepositWizard = () => {
   const [currentStep, setCurrentStep] = useState<'select' | 'address' | 'confirm'>('select');
   const [formData, setFormData] = useState<DepositForm>({ amount: 0, cryptoType: '' });
   const [copiedAddress, setCopiedAddress] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  // const [isSubmitting, setIsSubmitting] = useState(false);
 
   const { assets, loading: assetsLoading, error: assetsError } = useCryptoAssets();
 
@@ -344,15 +344,15 @@ const DepositWizard = () => {
     }
   };
 
-  const handleSubmit = async () => {
-    if (!canProceed) return;
+  // const handleSubmit = async () => {
+  //   if (!canProceed) return;
 
-    setIsSubmitting(true);
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    setIsSubmitting(false);
-    setCurrentStep('confirm');
-  };
+  //   setIsSubmitting(true);
+  //   // Simulate API call
+  //   await new Promise(resolve => setTimeout(resolve, 2000));
+  //   setIsSubmitting(false);
+  //   setCurrentStep('confirm');
+  // };
 
   if (currentStep === 'confirm') {
     return (
@@ -488,7 +488,7 @@ const DepositWizard = () => {
                 </div>
               </div>
 
-              <button
+              {/* <button
                 onClick={handleSubmit}
                 disabled={isSubmitting}
                 className="w-full bg-blue-600 text-white py-4 rounded-xl font-semibold hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors flex items-center justify-center space-x-2"
@@ -501,7 +501,7 @@ const DepositWizard = () => {
                 ) : (
                   <span>I&apos;ve Sent the Crypto</span>
                 )}
-              </button>
+              </button> */}
             </div>
           </motion.div>
         )}
