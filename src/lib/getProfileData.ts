@@ -6,15 +6,8 @@ import { supabase } from "./supabaseClient"
 import { getSession } from "./auth"
 import { Deposit, DepositStatus,  UpdateProfileInput , Withdrawal, WithdrawalStatus } from "@/types/businesses";
 import { redirect } from "next/navigation";
-
-// Add this type definition near your other type definitions
  
-
-
-
-/**
- * Fetches the current user's profile data with wallet addresses
- */
+ 
 export async function getProfileData(): Promise<{ data?: ProfileData; error?: string }> {
   try {
     console.log('📥 [getProfileData] Starting...');
