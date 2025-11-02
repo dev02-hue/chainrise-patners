@@ -5,6 +5,7 @@ import "./globals.css";
 import LayoutWrapper from "./component/layout/LayoutWrapper";
 import SmartsuppScript from "./component/layout/TawkToScript";
 import PageViewTracker from "./component/user/profile/PageViewTracker";
+import { Suspense } from "react";
  
 
 const geistSans = Geist({
@@ -34,7 +35,10 @@ export default function RootLayout({
         <SmartsuppScript />
       </head>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        <PageViewTracker />
+        
+         <Suspense fallback={null}>
+          <PageViewTracker />
+        </Suspense>
         <LayoutWrapper>{children}</LayoutWrapper>
       </body>
     </html>
