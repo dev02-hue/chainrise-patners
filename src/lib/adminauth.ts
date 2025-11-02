@@ -688,32 +688,51 @@ async function createAdminFeeDeposit(params: {
   description?: string;
   reference: string;
 }): Promise<{ data?: any; error?: string }> {
-  // const adminNotes = params.description 
-  //   ? `Admin add_funds_with_fee: ${params.description} | By: ${params.adminId}`
-  //   : `Admin add_funds_with_fee | By: ${params.adminId}`;
-
-  const { data: deposit, error: depositError } = await supabase
-    .from('admin_fee_deposits')
-    .insert([{
-      user_id: params.userId,
-      admin_id: params.adminId,
+  try {
+    console.log('[createAdminFeeDeposit] Creating locked investment deposit:', {
+      userId: params.userId,
       amount: params.amount,
-      crypto_type: params.cryptoType,
-      investment_plan: params.investmentPlan,
-      fee_amount: 0, // You can calculate fees here if needed
-      net_amount: params.amount,
-      description: params.description,
-      reference: params.reference,
-      status: 'completed'
-    }])
-    .select()
-    .single();
+      plan: params.investmentPlan
+    });
 
-  if (depositError) {
-    return { error: depositError.message };
+    // Calculate maturity date (60 days from now)
+    const maturityDate = new Date();
+    maturityDate.setDate(maturityDate.getDate() + 60);
+
+    const { data: deposit, error: depositError } = await supabase
+      .from('admin_fee_deposits')
+      .insert([{
+        user_id: params.userId,
+        admin_id: params.adminId,
+        amount: params.amount,
+        crypto_type: params.cryptoType,
+        investment_plan: params.investmentPlan,
+        fee_amount: 0,
+        net_amount: params.amount,
+        description: params.description,
+        reference: params.reference,
+        status: 'locked', // Changed from 'completed' to 'locked'
+        is_locked: true,
+        locked_amount: params.amount,
+        maturity_date: maturityDate.toISOString(),
+        days_remaining: 60,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }])
+      .select()
+      .single();
+
+    if (depositError) {
+      console.error('[createAdminFeeDeposit] Database error:', depositError);
+      return { error: depositError.message };
+    }
+
+    console.log('[createAdminFeeDeposit] Locked investment created successfully:', deposit.id);
+    return { data: deposit };
+  } catch (err) {
+    console.error('[createAdminFeeDeposit] Unexpected error:', err);
+    return { error: 'Failed to create locked investment deposit' };
   }
-
-  return { data: deposit };
 }
 
 /**
@@ -2120,53 +2139,137 @@ function generateStatusEmailTemplate(
   error?: string 
 }> {
   try {
-    console.log('[getUserAdminDepositTotals] Calculating totals for user:', userId);
+    console.log('🔍 [getUserAdminDepositTotals] START - Calculating totals for user:', userId);
+    console.log('📝 [getUserAdminDepositTotals] User ID type:', typeof userId, 'Value:', userId);
 
     // Validate user exists
+    console.log('👤 [getUserAdminDepositTotals] Validating user existence...');
     const { data: user, error: userError } = await supabase
       .from('chainrise_profile')
       .select('id')
       .eq('id', userId)
       .single();
 
+    console.log('👤 [getUserAdminDepositTotals] User validation result:', { user, userError });
+
     if (userError || !user) {
+      console.error('❌ [getUserAdminDepositTotals] User not found or error:', userError);
       return { error: 'User not found' };
     }
 
-    // Calculate total from admin_fee_deposits
-    const { data: feeDeposits, error: feeError } = await supabase
+    console.log('✅ [getUserAdminDepositTotals] User validated successfully');
+
+    // Calculate total from admin_fee_deposits - INCLUDING BOTH "completed" AND "locked" STATUSES
+    console.log('💰 [getUserAdminDepositTotals] Fetching fee deposits (completed + locked)...');
+    const { data: feeDeposits, error: feeError, count: feeCount } = await supabase
       .from('admin_fee_deposits')
-      .select('amount')
+      .select('amount, user_id, status, created_at', { count: 'exact' })
       .eq('user_id', userId)
-      .eq('status', 'completed');
+      .in('status', ['completed', 'locked']); // Changed from .eq to .in for multiple statuses
+
+    console.log('💰 [getUserAdminDepositTotals] Fee deposits query results:', {
+      feeDeposits,
+      feeError,
+      feeCount,
+      rowCount: feeDeposits?.length || 0,
+      statusesIncluded: ['completed', 'locked']
+    });
 
     if (feeError) {
-      console.error('[getUserAdminDepositTotals] Error fetching fee deposits:', feeError);
+      console.error('❌ [getUserAdminDepositTotals] Error fetching fee deposits:', feeError);
       return { error: 'Failed to fetch fee deposits' };
     }
 
-    // Calculate total from admin_earnings_deposits
-    const { data: earningsDeposits, error: earningsError } = await supabase
+    // Log individual fee deposits for debugging
+    if (feeDeposits && feeDeposits.length > 0) {
+      console.log('📊 [getUserAdminDepositTotals] Individual fee deposits:');
+      feeDeposits.forEach((deposit, index) => {
+        console.log(`   Deposit ${index + 1}:`, {
+          amount: deposit.amount,
+          user_id: deposit.user_id,
+          status: deposit.status,
+          created_at: deposit.created_at
+        });
+      });
+      
+      // Group deposits by status for better visibility
+      const completedCount = feeDeposits.filter(d => d.status === 'completed').length;
+      const lockedCount = feeDeposits.filter(d => d.status === 'locked').length;
+      console.log('📊 [getUserAdminDepositTotals] Fee deposits by status:', {
+        completed: completedCount,
+        locked: lockedCount,
+        total: feeDeposits.length
+      });
+    } else {
+      console.log('ℹ️ [getUserAdminDepositTotals] No fee deposits found for user (completed or locked status)');
+    }
+
+    // Calculate total from admin_earnings_deposits - STILL ONLY "completed" STATUS
+    console.log('💸 [getUserAdminDepositTotals] Fetching earnings deposits (completed only)...');
+    const { data: earningsDeposits, error: earningsError, count: earningsCount } = await supabase
       .from('admin_earnings_deposits')
-      .select('amount')
+      .select('amount, user_id, status, created_at', { count: 'exact' })
       .eq('user_id', userId)
       .eq('status', 'completed');
 
+    console.log('💸 [getUserAdminDepositTotals] Earnings deposits query results:', {
+      earningsDeposits,
+      earningsError,
+      earningsCount,
+      rowCount: earningsDeposits?.length || 0
+    });
+
     if (earningsError) {
-      console.error('[getUserAdminDepositTotals] Error fetching earnings deposits:', earningsError);
+      console.error('❌ [getUserAdminDepositTotals] Error fetching earnings deposits:', earningsError);
       return { error: 'Failed to fetch earnings deposits' };
     }
 
+    // Log individual earnings deposits for debugging
+    if (earningsDeposits && earningsDeposits.length > 0) {
+      console.log('📊 [getUserAdminDepositTotals] Individual earnings deposits:');
+      earningsDeposits.forEach((deposit, index) => {
+        console.log(`   Deposit ${index + 1}:`, {
+          amount: deposit.amount,
+          user_id: deposit.user_id,
+          status: deposit.status,
+          created_at: deposit.created_at
+        });
+      });
+    } else {
+      console.log('ℹ️ [getUserAdminDepositTotals] No earnings deposits found for user');
+    }
+
     // Calculate totals
-    const totalFeeDeposits = feeDeposits?.reduce((sum, deposit) => sum + (deposit.amount || 0), 0) || 0;
-    const totalEarningsDeposits = earningsDeposits?.reduce((sum, deposit) => sum + (deposit.amount || 0), 0) || 0;
+    const totalFeeDeposits = feeDeposits?.reduce((sum, deposit) => {
+      const amount = deposit.amount || 0;
+      console.log(`   Adding fee deposit amount: ${amount} (status: ${deposit.status}), running total: ${sum + amount}`);
+      return sum + amount;
+    }, 0) || 0;
+
+    const totalEarningsDeposits = earningsDeposits?.reduce((sum, deposit) => {
+      const amount = deposit.amount || 0;
+      console.log(`   Adding earnings deposit amount: ${amount}, running total: ${sum + amount}`);
+      return sum + amount;
+    }, 0) || 0;
+
     const totalAllAdminDeposits = totalFeeDeposits + totalEarningsDeposits;
 
-    console.log('[getUserAdminDepositTotals] Calculated totals:', {
-      totalFeeDeposits,
-      totalEarningsDeposits,
-      totalAllAdminDeposits
+    console.log('🎯 [getUserAdminDepositTotals] FINAL CALCULATED TOTALS:', {
+      totalFeeDeposits: {
+        value: totalFeeDeposits,
+        note: 'Includes both completed and locked statuses'
+      },
+      totalEarningsDeposits: {
+        value: totalEarningsDeposits,
+        note: 'Includes only completed status'
+      },
+      totalAllAdminDeposits: {
+        value: totalAllAdminDeposits,
+        formula: `${totalFeeDeposits} + ${totalEarningsDeposits} = ${totalAllAdminDeposits}`
+      }
     });
+
+    console.log('✅ [getUserAdminDepositTotals] COMPLETED SUCCESSFULLY');
 
     return {
       data: {
@@ -2176,7 +2279,7 @@ function generateStatusEmailTemplate(
       }
     };
   } catch (err) {
-    console.error('[getUserAdminDepositTotals] Unexpected error:', err);
+    console.error('💥 [getUserAdminDepositTotals] UNEXPECTED ERROR:', err);
     return { error: 'An unexpected error occurred' };
   }
 }

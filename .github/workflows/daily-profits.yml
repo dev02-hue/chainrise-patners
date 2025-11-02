@@ -1,4 +1,4 @@
-name: Calculate Daily Investment Profits
+name: Calculate Daily Investment Profits & Maturity
 
 on:
   schedule:
@@ -10,9 +10,10 @@ jobs:
   calculate-profits:
     runs-on: ubuntu-latest
     steps:
-      - name: Call Daily Profits API
+      - name: Call Investment Maturity API (New)
         run: |
-          response=$(curl -s -w "\n%{http_code}" -X POST "${{ secrets.NEXTJS_APP_URL }}/api/cron/daily-profits/" \
+          echo "🔄 Calling Investment Maturity API..."
+          response=$(curl -s -w "\n%{http_code}" -X POST "${{ secrets.NEXTJS_APP_URL }}/api/cron/investment-maturity/" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             -H "Content-Type: application/json" \
             --location)  # This follows redirects
@@ -20,15 +21,15 @@ jobs:
           body=$(echo "$response" | head -n 1)
           status_code=$(echo "$response" | tail -n 1)
           
-          echo "Response status: $status_code"
-          echo "Response body: $body"
+          echo "📈 Investment Maturity Response status: $status_code"
+          echo "📈 Investment Maturity Response body: $body"
           
           if [ "$status_code" -ne 200 ]; then
-            echo "❌ API call failed with status $status_code"
+            echo "❌ Investment Maturity API call failed with status $status_code"
             exit 1
           else
-            echo "✅ API call successful"
+            echo "✅ Investment Maturity API call successful"
           fi
 
       - name: Log execution time
-        run: echo "Cron job executed at $(date -u)"
+        run: echo "🚀 Cron job executed at $(date -u)"
